@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Mail, CheckCircle, Trash2, AlertCircle, Shield, Clock, User, AlertTriangle } from "lucide-react"
+import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
 
@@ -132,28 +132,20 @@ export function ConnectedAccounts() {
     }
   }
 
-  const isTokenExpiringSoon = (expiresAt?: string) => {
-    if (!expiresAt) return false
-    const expiryTime = new Date(expiresAt).getTime()
-    const now = Date.now()
-    const oneHour = 60 * 60 * 1000
-    return expiryTime - now < oneHour
-  }
-
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Connected Accounts</CardTitle>
+      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold text-gray-900">Connected Accounts</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="animate-pulse space-y-3">
             {[1, 2].map((i) => (
-              <div key={i} className="flex items-center space-x-3 p-3 border rounded-lg">
-                <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full" />
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+              <div key={i} className="flex items-center space-x-3 p-3 bg-gray-100 rounded-xl">
+                <div className="w-10 h-10 bg-gray-300 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-gray-300 rounded w-3/4" />
+                  <div className="h-2 bg-gray-300 rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -164,31 +156,35 @@ export function ConnectedAccounts() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center">
-          <Mail className="mr-2 h-5 w-5" />
-          Connected Accounts
-          <Badge variant="secondary" className="ml-2">
-            {accounts.length}
-          </Badge>
-        </CardTitle>
+    <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
+            <Mail className="mr-2 h-4 w-4 text-blue-600" />
+            Gmail Accounts
+            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+              {accounts.length}
+            </Badge>
+          </CardTitle>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {/* Security Notice */}
-        <Alert>
-          <Shield className="h-4 w-4" />
-          <AlertDescription className="text-xs">
-            All connections use Google's secure OAuth 2.0. Your passwords are never stored.
+        <Alert className="border-blue-200 bg-blue-50/50">
+          <Shield className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-xs text-blue-800">
+            Secured with Google OAuth 2.0. Your credentials are never stored.
           </AlertDescription>
         </Alert>
 
         {accounts.length === 0 ? (
-          <div className="text-center py-6">
-            <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-            <h3 className="text-lg font-medium mb-2">No accounts connected</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Connect your Gmail accounts to start managing your emails
+          <div className="text-center py-8">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+              <Mail className="h-8 w-8 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
+            <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+              Start by connecting your Gmail accounts to manage all your emails in one place
             </p>
           </div>
         ) : (
@@ -196,68 +192,59 @@ export function ConnectedAccounts() {
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
               >
                 <div className="flex items-center space-x-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
-                    <AvatarFallback>
-                      {account.name ? (
-                        account.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()
-                      ) : (
-                        <User className="h-4 w-4" />
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
+                      <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                        {account.name ? (
+                          account.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()
+                        ) : (
+                          <User className="h-4 w-4" />
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
+                      <CheckCircle className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <p className="font-medium text-sm truncate">{account.email}</p>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
                       {account.is_primary && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
                           Primary
                         </Badge>
                       )}
-                      {isTokenExpiringSoon(account.token_expires_at) && (
-                        <Badge variant="destructive" className="text-xs">
-                          <AlertTriangle className="mr-1 h-3 w-3" />
-                          Expires Soon
-                        </Badge>
-                      )}
                     </div>
 
-                    {account.name && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{account.name}</p>
-                    )}
+                    {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
 
-                    <div className="flex items-center text-xs text-gray-500 mt-1">
-                      <CheckCircle className="mr-1 h-3 w-3 text-green-600" />
+                    <div className="flex items-center text-xs text-gray-500">
+                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
                       Connected {new Date(account.created_at).toLocaleDateString()}
-                      {account.token_expires_at && (
-                        <>
-                          <Clock className="ml-2 mr-1 h-3 w-3" />
-                          Expires {new Date(account.token_expires_at).toLocaleDateString()}
-                        </>
-                      )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                  {!account.is_primary && (
-                    <Button
-                      onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {!account.is_primary && (
+                      <Button
+                        onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -269,10 +256,10 @@ export function ConnectedAccounts() {
 
         {/* Development Notice */}
         {process.env.NODE_ENV === "development" && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              <strong>Dev Mode:</strong> Add test users in Google Cloud Console to avoid OAuth warnings.
+          <Alert variant="destructive" className="border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-xs text-amber-800">
+              <strong>Dev Mode:</strong> Configure Google Cloud Console if you encounter OAuth errors.
             </AlertDescription>
           </Alert>
         )}
