@@ -65,7 +65,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
-          className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-sm"
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
           size="sm"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -74,23 +74,23 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center text-lg text-foreground">
-            <Mail className="mr-2 h-5 w-5 text-primary" />
+          <DialogTitle className="flex items-center text-lg">
+            <Mail className="mr-2 h-5 w-5 text-blue-600" />
             Connect Gmail Account
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
+          <DialogDescription className="text-sm text-gray-600">
             Add another Gmail account to manage multiple inboxes in one place.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Current Status */}
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">Current Status</span>
+              <CheckCircle className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">Current Status</span>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-blue-800">
               You have{" "}
               <Badge variant="secondary" className="mx-1">
                 {existingAccounts}
@@ -100,9 +100,9 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
           </div>
 
           {/* Security Info */}
-          <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-            <Shield className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertDescription className="text-sm text-green-800 dark:text-green-200">
+          <Alert className="border-green-200 bg-green-50">
+            <Shield className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-sm text-green-800">
               <strong>Secure Connection:</strong> We use Google's OAuth 2.0 for secure authentication. Your passwords
               are never stored or accessed.
             </AlertDescription>
@@ -110,34 +110,34 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
 
           {/* Instructions */}
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-foreground">What happens next:</h4>
+            <h4 className="text-sm font-medium text-gray-900">What happens next:</h4>
             <div className="space-y-2">
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-primary">1</span>
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-medium text-blue-600">1</span>
                 </div>
-                <p className="text-sm text-muted-foreground">Google will open in a new window</p>
+                <p className="text-sm text-gray-700">Google will open in a new window</p>
               </div>
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-primary">2</span>
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-medium text-blue-600">2</span>
                 </div>
-                <p className="text-sm text-muted-foreground">Choose the Gmail account you want to connect</p>
+                <p className="text-sm text-gray-700">Choose the Gmail account you want to connect</p>
               </div>
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-primary">3</span>
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-medium text-blue-600">3</span>
                 </div>
-                <p className="text-sm text-muted-foreground">Grant permissions to read and manage emails</p>
+                <p className="text-sm text-gray-700">Grant permissions to read and manage emails</p>
               </div>
             </div>
           </div>
 
           {/* Development Warning */}
           {process.env.NODE_ENV === "development" && (
-            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
+            <Alert variant="destructive" className="border-amber-200 bg-amber-50">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-xs text-amber-800">
                 <strong>Development Mode:</strong> If you see "Access blocked", you need to add your email as a test
                 user in Google Cloud Console.
               </AlertDescription>
@@ -149,11 +149,11 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             <Button
               onClick={handleConnectAccount}
               disabled={isConnecting}
-              className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+              className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
             >
               {isConnecting ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground mr-2" />
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                   Connecting...
                 </>
               ) : (

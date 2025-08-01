@@ -134,18 +134,18 @@ export function ConnectedAccounts() {
 
   if (isLoading) {
     return (
-      <Card className="glass">
+      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-foreground">Connected Accounts</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-900">Connected Accounts</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="animate-pulse space-y-3">
             {[1, 2].map((i) => (
-              <div key={i} className="flex items-center space-x-3 p-3 bg-muted/50 rounded-xl">
-                <div className="w-10 h-10 bg-muted rounded-full" />
+              <div key={i} className="flex items-center space-x-3 p-3 bg-gray-100 rounded-xl">
+                <div className="w-10 h-10 bg-gray-300 rounded-full" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-muted rounded w-3/4" />
-                  <div className="h-2 bg-muted rounded w-1/2" />
+                  <div className="h-3 bg-gray-300 rounded w-3/4" />
+                  <div className="h-2 bg-gray-300 rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -156,13 +156,13 @@ export function ConnectedAccounts() {
   }
 
   return (
-    <Card className="glass">
+    <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-foreground flex items-center">
-            <Mail className="mr-2 h-4 w-4 text-primary" />
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
+            <Mail className="mr-2 h-4 w-4 text-blue-600" />
             Gmail Accounts
-            <Badge variant="secondary" className="ml-2 text-xs">
+            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
               {accounts.length}
             </Badge>
           </CardTitle>
@@ -170,20 +170,20 @@ export function ConnectedAccounts() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Security Notice */}
-        <Alert className="border-primary/20 bg-primary/5">
-          <Shield className="h-4 w-4 text-primary" />
-          <AlertDescription className="text-xs text-foreground">
+        <Alert className="border-blue-200 bg-blue-50/50">
+          <Shield className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-xs text-blue-800">
             Secured with Google OAuth 2.0. Your credentials are never stored.
           </AlertDescription>
         </Alert>
 
         {accounts.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
-              <Mail className="h-8 w-8 text-primary" />
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+              <Mail className="h-8 w-8 text-blue-600" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Connect Your Gmail</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
+            <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
               Start by connecting your Gmail accounts to manage all your emails in one place
             </p>
           </div>
@@ -192,13 +192,13 @@ export function ConnectedAccounts() {
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className="group relative bg-card border border-border rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-primary/30"
+                className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
               >
                 <div className="flex items-center space-x-3">
                   <div className="relative">
-                    <Avatar className="h-10 w-10 ring-2 ring-background shadow-sm">
+                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
                       <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-sm font-medium">
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
                         {account.name ? (
                           account.name
                             .split(" ")
@@ -210,24 +210,24 @@ export function ConnectedAccounts() {
                         )}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-background rounded-full flex items-center justify-center">
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
                       <CheckCircle className="h-2.5 w-2.5 text-white" />
                     </div>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2 mb-1">
-                      <p className="font-medium text-sm text-foreground truncate">{account.email}</p>
+                      <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
                       {account.is_primary && (
-                        <Badge className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground text-xs px-2 py-0.5">
+                        <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
                           Primary
                         </Badge>
                       )}
                     </div>
 
-                    {account.name && <p className="text-xs text-muted-foreground truncate mb-1">{account.name}</p>}
+                    {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
 
-                    <div className="flex items-center text-xs text-muted-foreground">
+                    <div className="flex items-center text-xs text-gray-500">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
                       Connected {new Date(account.created_at).toLocaleDateString()}
                     </div>
@@ -239,7 +239,7 @@ export function ConnectedAccounts() {
                         onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -256,9 +256,9 @@ export function ConnectedAccounts() {
 
         {/* Development Notice */}
         {process.env.NODE_ENV === "development" && (
-          <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
+          <Alert variant="destructive" className="border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-xs text-amber-800">
               <strong>Dev Mode:</strong> Configure Google Cloud Console if you encounter OAuth errors.
             </AlertDescription>
           </Alert>

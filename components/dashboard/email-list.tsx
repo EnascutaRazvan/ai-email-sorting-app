@@ -173,20 +173,20 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
   if (isLoading) {
     return (
-      <Card className="h-full glass">
+      <Card className="h-full shadow-sm border-0 bg-white/50 backdrop-blur-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-foreground">Email Inbox</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-900">Email Inbox</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-muted/50 rounded-xl p-4">
+              <div key={i} className="bg-gray-100 rounded-xl p-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-muted rounded-full" />
+                  <div className="w-10 h-10 bg-gray-300 rounded-full" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="h-3 bg-muted rounded w-1/2" />
-                    <div className="h-3 bg-muted rounded w-full" />
+                    <div className="h-4 bg-gray-300 rounded w-3/4" />
+                    <div className="h-3 bg-gray-300 rounded w-1/2" />
+                    <div className="h-3 bg-gray-300 rounded w-full" />
                   </div>
                 </div>
               </div>
@@ -198,13 +198,13 @@ export function EmailList({ selectedCategory }: EmailListProps) {
   }
 
   return (
-    <Card className="h-full glass">
+    <Card className="h-full shadow-sm border-0 bg-white/50 backdrop-blur-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <CardTitle className="text-base font-semibold text-foreground flex items-center">
-            <Inbox className="mr-2 h-4 w-4 text-primary" />
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
+            <Inbox className="mr-2 h-4 w-4 text-blue-600" />
             Email Inbox
-            <Badge variant="secondary" className="ml-2 text-xs">
+            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
               {filteredEmails.length}
             </Badge>
           </CardTitle>
@@ -224,13 +224,13 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
         {/* Email Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-4 bg-muted/50">
+          <TabsList className="grid w-full grid-cols-4 bg-gray-100/50">
             <TabsTrigger value="all" className="text-xs">
               <Mail className="mr-1 h-3 w-3" />
               All
             </TabsTrigger>
             <TabsTrigger value="unread" className="text-xs">
-              <div className="w-2 h-2 bg-primary rounded-full mr-1" />
+              <div className="w-2 h-2 bg-blue-600 rounded-full mr-1" />
               Unread
             </TabsTrigger>
             <TabsTrigger value="important" className="text-xs">
@@ -245,8 +245,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
         </Tabs>
 
         {selectedEmails.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-border">
-            <span className="text-sm text-muted-foreground">{selectedEmails.size} selected</span>
+          <div className="flex flex-wrap items-center gap-2 pt-4 border-t">
+            <span className="text-sm text-gray-600">{selectedEmails.size} selected</span>
             <Button
               onClick={handleBulkDelete}
               variant="destructive"
@@ -273,19 +273,19 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
       <CardContent className="space-y-6">
         {filteredEmails.length > 0 && (
-          <div className="flex items-center space-x-2 pb-2 border-b border-border">
+          <div className="flex items-center space-x-2 pb-2 border-b">
             <Checkbox checked={selectedEmails.size === filteredEmails.length} onCheckedChange={handleSelectAll} />
-            <span className="text-sm text-muted-foreground">Select all</span>
+            <span className="text-sm text-gray-600">Select all</span>
           </div>
         )}
 
         {filteredEmails.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-muted to-muted/50 rounded-full flex items-center justify-center">
-              <Mail className="h-8 w-8 text-muted-foreground" />
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+              <Mail className="h-8 w-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No emails found</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No emails found</h3>
+            <p className="text-sm text-gray-600 max-w-sm mx-auto">
               {selectedCategory
                 ? "No emails in this category yet."
                 : "Connect your Gmail accounts and refresh to see your emails."}
@@ -296,10 +296,10 @@ export function EmailList({ selectedCategory }: EmailListProps) {
             {Object.entries(emailsByAccount).map(([accountEmail, { account, emails: accountEmails }]) => (
               <div key={accountEmail} className="space-y-3">
                 {/* Account Header */}
-                <div className="flex items-center space-x-3 pb-2 border-b border-border">
+                <div className="flex items-center space-x-3 pb-2 border-b border-gray-200">
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
-                    <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-xs">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs">
                       {account.name ? (
                         account.name
                           .split(" ")
@@ -312,8 +312,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{account.email}</p>
-                    {account.name && <p className="text-xs text-muted-foreground">{account.name}</p>}
+                    <p className="text-sm font-medium text-gray-900">{account.email}</p>
+                    {account.name && <p className="text-xs text-gray-600">{account.name}</p>}
                   </div>
                   <Badge variant="outline" className="text-xs">
                     {accountEmails.length} emails
@@ -325,9 +325,9 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                   {accountEmails.map((email) => (
                     <div
                       key={email.id}
-                      className={`group bg-card border border-border rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-primary/30 ${
-                        selectedEmails.has(email.id) ? "bg-primary/5 border-primary/30 shadow-sm" : ""
-                      } ${!email.is_read ? "bg-gradient-to-r from-primary/5 to-transparent" : ""}`}
+                      className={`group bg-white border border-gray-200/50 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
+                        selectedEmails.has(email.id) ? "bg-blue-50 border-blue-200 shadow-sm" : ""
+                      } ${!email.is_read ? "bg-gradient-to-r from-blue-50/30 to-transparent" : ""}`}
                     >
                       <div className="flex items-start space-x-3">
                         <Checkbox
@@ -340,11 +340,11 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="flex items-center space-x-2 min-w-0">
                               <h4
-                                className={`font-medium text-sm truncate ${!email.is_read ? "font-semibold text-foreground" : "text-foreground/80"}`}
+                                className={`font-medium text-sm truncate ${!email.is_read ? "font-semibold text-gray-900" : "text-gray-800"}`}
                               >
                                 {email.subject}
                               </h4>
-                              {!email.is_read && <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />}
+                              {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />}
                             </div>
                             <div className="flex items-center space-x-2 flex-shrink-0">
                               {email.category_name && (
@@ -360,27 +360,27 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                                   {email.category_name}
                                 </Badge>
                               )}
-                              <div className="flex items-center text-xs text-muted-foreground">
+                              <div className="flex items-center text-xs text-gray-500">
                                 <Calendar className="mr-1 h-3 w-3" />
                                 {new Date(email.received_at).toLocaleDateString()}
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center text-sm text-muted-foreground space-x-2">
+                          <div className="flex items-center text-sm text-gray-600 space-x-2">
                             <User className="h-3 w-3 flex-shrink-0" />
                             <span className="truncate">{email.sender}</span>
                           </div>
 
                           {email.ai_summary && (
-                            <div className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg p-3">
-                              <p className="text-sm text-foreground">
+                            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-lg p-3">
+                              <p className="text-sm text-indigo-900">
                                 <span className="font-medium">AI Summary:</span> {email.ai_summary}
                               </p>
                             </div>
                           )}
 
-                          <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{email.snippet}</p>
+                          <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
                         </div>
                       </div>
                     </div>
