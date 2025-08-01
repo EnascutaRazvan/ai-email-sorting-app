@@ -1,73 +1,83 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
-    // Get all active user accounts
-    const { data: accounts, error } = await supabase.from("user_accounts").select("*").eq("is_primary", true) // Only sync primary accounts to avoid rate limits
-
-    if (error) {
-      throw error
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    let totalProcessed = 0
-    let totalNewEmails = 0
+    // Get all active accounts for the user
+    const { data: accounts, error: accountsError } = await supabase
+      .from("user_accounts")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("is_active", true)
+
+    if (accountsError) {
+      throw new Error("Failed to fetch user accounts")
+    }
+
+    if (!accounts || accounts.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No active accounts to sync",
+        results: [],
+      })
+    }
+
     const results = []
 
-    for (const account of accounts || []) {
+    // Sync each account
+    for (const account of accounts) {
       try {
-        // Call the import API for each account
-        const importResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/emails/import`, {
+        const importResponse = await fetch(`${request.nextUrl.origin}/api/emails/import`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Cookie: request.headers.get("cookie") || "",
           },
-          body: JSON.stringify({
-            accountId: account.id,
-            userId: account.user_id,
-          }),
+          body: JSON.stringify({ accountId: account.id }),
         })
 
-        if (importResponse.ok) {
-          const result = await importResponse.json()
-          totalProcessed += result.processed || 0
-          totalNewEmails += result.newEmails || 0
-          results.push({
-            accountId: account.id,
-            email: account.email,
-            success: true,
-            ...result,
-          })
-        } else {
-          results.push({
-            accountId: account.id,
-            email: account.email,
-            success: false,
-            error: "Import failed",
-          })
-        }
+        const importResult = await importResponse.json()
+
+        results.push({
+          accountId: account.id,
+          email: account.email,
+          success: importResult.success,
+          imported: importResult.imported || 0,
+          message: importResult.message,
+          errors: importResult.errors,
+        })
       } catch (error) {
-        console.error(`Error syncing account ${account.id}:`, error)
+        console.error(`Error syncing account ${account.email}:`, error)
         results.push({
           accountId: account.id,
           email: account.email,
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          imported: 0,
+          message: `Failed to sync: ${error.message}`,
         })
       }
     }
 
+    const totalImported = results.reduce((sum, result) => sum + (result.imported || 0), 0)
+    const successfulSyncs = results.filter((r) => r.success).length
+
     return NextResponse.json({
       success: true,
-      totalAccounts: accounts?.length || 0,
-      totalProcessed,
-      totalNewEmails,
+      message: `Synced ${successfulSyncs}/${accounts.length} accounts, imported ${totalImported} emails`,
+      totalImported,
       results,
     })
   } catch (error) {
-    console.error("Bulk sync error:", error)
-    return NextResponse.json({ error: "Failed to sync emails" }, { status: 500 })
+    console.error("Sync all error:", error)
+    return NextResponse.json({ error: "Failed to sync accounts" }, { status: 500 })
   }
 }

@@ -27,6 +27,7 @@ interface Email {
   }
   account?: {
     email: string
+    name?: string
   }
 }
 
@@ -55,7 +56,7 @@ export function EmailList() {
       const response = await fetch("/api/emails")
       const result = await response.json()
 
-      if (response.ok) {
+      if (result.success) {
         setEmails(result.emails || [])
       } else {
         throw new Error(result.error || "Failed to fetch emails")
@@ -77,7 +78,7 @@ export function EmailList() {
       const response = await fetch("/api/categories")
       const result = await response.json()
 
-      if (response.ok) {
+      if (result.success) {
         setCategories(result.categories || [])
       }
     } catch (error) {
@@ -89,7 +90,8 @@ export function EmailList() {
     const matchesSearch =
       email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       email.sender.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      email.snippet.toLowerCase().includes(searchTerm.toLowerCase())
+      email.snippet.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (email.ai_summary && email.ai_summary.toLowerCase().includes(searchTerm.toLowerCase()))
 
     const matchesCategory =
       selectedCategory === "all" ||
@@ -246,7 +248,7 @@ export function EmailList() {
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                             <User className="h-3 w-3" />
                             <span className="truncate">{email.sender}</span>
-                            {email.account && (
+                            {email.account?.email && (
                               <>
                                 <span>•</span>
                                 <span className="text-xs">{email.account.email}</span>
