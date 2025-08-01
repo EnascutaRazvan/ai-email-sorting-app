@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+
 import { useSession, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Mail, LogOut, Settings, RefreshCw } from "lucide-react"
+import { Mail, LogOut, Settings } from "lucide-react"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -14,26 +14,6 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: session } = useSession()
-  const [isProcessing, setIsProcessing] = useState(false)
-
-  const handleProcessEmails = async () => {
-    setIsProcessing(true)
-    try {
-      const response = await fetch("/api/emails/process", { method: "POST" })
-      const result = await response.json()
-
-      if (response.ok) {
-        console.log("Email processing completed:", result)
-        // You could show a toast notification here
-      } else {
-        console.error("Email processing failed:", result.error)
-      }
-    } catch (error) {
-      console.error("Error processing emails:", error)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -41,10 +21,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <header className="border-b bg-white dark:bg-gray-950 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Button onClick={handleProcessEmails} disabled={isProcessing} variant="outline" size="sm">
-              <RefreshCw className={`mr-2 h-4 w-4 ${isProcessing ? "animate-spin" : ""}`} />
-              {isProcessing ? "Processing..." : "Process Emails"}
-            </Button>
             <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
               <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
