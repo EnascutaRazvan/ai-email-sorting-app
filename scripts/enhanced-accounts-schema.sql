@@ -3,20 +3,12 @@ ALTER TABLE user_accounts
 ADD COLUMN IF NOT EXISTS name TEXT,
 ADD COLUMN IF NOT EXISTS picture TEXT,
 ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS scope TEXT,
-ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'pending',
-ADD COLUMN IF NOT EXISTS error_message TEXT;
+ADD COLUMN IF NOT EXISTS scope TEXT;
 
 -- Update existing records to have proper timestamps
 UPDATE user_accounts 
 SET updated_at = COALESCE(updated_at, created_at, NOW())
 WHERE updated_at IS NULL;
-
--- Update existing records to have proper sync status
-UPDATE user_accounts 
-SET sync_status = 'active' 
-WHERE sync_status IS NULL OR sync_status = 'pending';
 
 -- Add index for better performance on token expiration queries
 CREATE INDEX IF NOT EXISTS idx_user_accounts_token_expires 
@@ -26,10 +18,6 @@ WHERE token_expires_at IS NOT NULL;
 -- Add index for user lookups
 CREATE INDEX IF NOT EXISTS idx_user_accounts_user_id 
 ON user_accounts(user_id);
-
--- Add index for better performance
-CREATE INDEX IF NOT EXISTS idx_user_accounts_sync_status ON user_accounts(sync_status);
-CREATE INDEX IF NOT EXISTS idx_user_accounts_last_sync ON user_accounts(last_sync_at);
 
 -- Add constraint to ensure primary account exists
 CREATE OR REPLACE FUNCTION ensure_primary_account()

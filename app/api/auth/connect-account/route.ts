@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       }),
     ).toString("base64url")
 
-    // Build Google OAuth URL with parameters that force account selection
+    // Build Google OAuth URL with all required parameters
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
       redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/connect-callback`,
@@ -35,27 +35,20 @@ export async function GET(request: NextRequest) {
         "https://www.googleapis.com/auth/gmail.modify",
       ].join(" "),
       access_type: "offline",
-      // Key parameters for multi-account support
-      prompt: "select_account consent", // Force account selection AND consent
-      include_granted_scopes: "false", // Don't include previously granted scopes
+      prompt: "consent select_account", // Force account selection and consent
       state: state,
-      // Add hint to encourage different account selection
-      login_hint: "", // Empty login_hint forces account chooser
+      include_granted_scopes: "true", // Include previously granted scopes
     })
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 
-    // Log the connection attempt for debugging
-    console.log(`Multi-account OAuth initiated for user ${session.user.id}`)
+    // Log the connection attempt for security monitoring
+    console.log(`OAuth connection initiated for user ${session.user.id} at ${new Date().toISOString()}`)
 
     return NextResponse.json({
       authUrl,
-      instructions: {
-        step1: "You will see Google's account chooser",
-        step2: "Select a DIFFERENT account than your current one",
-        step3: "If you don't see other accounts, click 'Use another account'",
-        step4: "Sign in with the account you want to connect",
-      },
+      state, // Return state for client-side verification if needed
+      scopes: ["Gmail Read Access", "Gmail Modify Access", "Profile Information"],
     })
   } catch (error) {
     console.error("Error generating connect URL:", error)
