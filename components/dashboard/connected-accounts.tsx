@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, CheckCircle, Trash2, AlertCircle, Shield, Clock, User, AlertTriangle } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
-import { OAuthSetupGuide } from "./oauth-setup-guide"
 
 interface ConnectedAccount {
   id: string
@@ -167,16 +166,13 @@ export function ConnectedAccounts() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center">
-            <Mail className="mr-2 h-5 w-5" />
-            Connected Accounts
-            <Badge variant="secondary" className="ml-2">
-              {accounts.length}
-            </Badge>
-          </CardTitle>
-          {process.env.NODE_ENV === "development" && <OAuthSetupGuide />}
-        </div>
+        <CardTitle className="text-lg flex items-center">
+          <Mail className="mr-2 h-5 w-5" />
+          Connected Accounts
+          <Badge variant="secondary" className="ml-2">
+            {accounts.length}
+          </Badge>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Security Notice */}
@@ -276,8 +272,7 @@ export function ConnectedAccounts() {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              <strong>Getting "Access blocked" error?</strong> You need to configure Google Cloud Console and add test
-              users. Use the Setup Guide above for step-by-step instructions.
+              <strong>Dev Mode:</strong> Add test users in Google Cloud Console to avoid OAuth warnings.
             </AlertDescription>
           </Alert>
         )}

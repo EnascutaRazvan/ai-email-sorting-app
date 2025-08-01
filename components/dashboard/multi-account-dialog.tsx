@@ -14,7 +14,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Mail, Shield, RefreshCw, CheckCircle, AlertTriangle, Info } from "lucide-react"
 import { showErrorToast } from "@/lib/error-handler"
-import { OAuthSetupGuide } from "./oauth-setup-guide"
 
 interface MultiAccountDialogProps {
   onAccountConnected: () => void
@@ -34,21 +33,13 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
       const response = await fetch("/api/auth/connect-account")
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to generate authorization URL")
+        throw new Error("Failed to generate authorization URL")
       }
 
       const data = await response.json()
 
       // Open OAuth in popup window for better UX
-      const popup = window.open(
-        data.authUrl,
-        "gmail-oauth",
-        "width=500,height=700,scrollbars=yes,resizable=yes,left=" +
-          (window.screen.width / 2 - 250) +
-          ",top=" +
-          (window.screen.height / 2 - 350),
-      )
+      const popup = window.open(data.authUrl, "gmail-oauth", "width=500,height=700,scrollbars=yes,resizable=yes")
 
       if (!popup) {
         throw new Error("Popup blocked. Please allow popups and try again.")
@@ -176,11 +167,8 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">
-                <strong>Development Mode:</strong> If you see "Access blocked" error, you need to configure Google Cloud
-                Console properly.
-                <div className="mt-2">
-                  <OAuthSetupGuide />
-                </div>
+                <strong>Development Mode:</strong> You may see an "unverified app" warning from Google. Click "Advanced"
+                → "Go to [app name] (unsafe)" to proceed.
               </AlertDescription>
             </Alert>
           )}

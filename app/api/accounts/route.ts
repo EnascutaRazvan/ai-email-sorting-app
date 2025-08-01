@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { createClient } from "@supabase/supabase-js"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route" // Import authOptions
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -35,32 +35,37 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 })
     }
 
-    // Check for expiring tokens and flag them
-    const accountsWithStatus = accounts.map((account) => ({
+    // Add token status information
+    const enhancedAccounts = accounts.map((account) => ({
       ...account,
       token_status: getTokenStatus(account.token_expires_at),
+      permissions: parseScopes(account.scope),
     }))
 
     return NextResponse.json({
-      accounts: accountsWithStatus,
+      accounts: enhancedAccounts,
       total: accounts.length,
-      primary: accounts.find((acc) => acc.is_primary),
+      primary: accounts.find((acc) => acc.is_primary)?.email,
     })
   } catch (error) {
-    console.error("Error in accounts API:", error)
+    console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-function getTokenStatus(expiresAt: string | null): "valid" | "expiring" | "expired" {
-  if (!expiresAt) return "valid"
+function getTokenStatus(expiresAt: string | null): "valid" | "expiring_soon" | "expired" | "never" {
+  if (!expiresAt) return "never"
 
-  const expiryTime = new Date(expiresAt).getTime()
+  const expiry = new Date(expiresAt).getTime()
   const now = Date.now()
   const oneHour = 60 * 60 * 1000
-  const oneDayFromNow = now + 24 * oneHour
 
-  if (expiryTime < now) return "expired"
-  if (expiryTime < oneDayFromNow) return "expiring"
+  if (expiry < now) return "expired"
+  if (expiry - now < oneHour) return "expiring_soon"
   return "valid"
+}
+
+function parseScopes(scope: string | null): string[] {
+  if (!scope) return []
+  return scope.split(" ").filter(Boolean)
 }
