@@ -7,7 +7,6 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { ConnectedAccounts } from "@/components/dashboard/connected-accounts"
 import { EmailList } from "@/components/dashboard/email-list"
 import { Categories } from "@/components/dashboard/categories"
-import { DevSetupAlert } from "@/components/dashboard/dev-setup-alert"
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
@@ -30,7 +29,6 @@ export default function Dashboard() {
       <div className="flex h-full">
         {/* Sidebar */}
         <div className="w-80 border-r bg-gray-50 dark:bg-gray-900 p-6 space-y-6">
-          <DevSetupAlert />
           <ConnectedAccounts />
           <Categories selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} />
         </div>
