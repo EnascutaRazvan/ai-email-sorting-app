@@ -65,14 +65,14 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
-          className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-elevation-2 hover:shadow-elevation-3 transition-all duration-200"
+          className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-sm"
           size="sm"
         >
           <Plus className="mr-2 h-4 w-4" />
           Connect Gmail Account
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-surface border-border shadow-elevation-4">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center text-lg text-foreground">
             <Mail className="mr-2 h-5 w-5 text-primary" />
@@ -85,14 +85,14 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
 
         <div className="space-y-4">
           {/* Current Status */}
-          <div className="bg-info/5 border border-info/30 rounded-lg p-4">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-info" />
+              <CheckCircle className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-foreground">Current Status</span>
             </div>
             <p className="text-sm text-muted-foreground">
               You have{" "}
-              <Badge variant="secondary" className="mx-1 bg-accent/20 text-accent-foreground border-accent/30">
+              <Badge variant="secondary" className="mx-1">
                 {existingAccounts}
               </Badge>
               Gmail account{existingAccounts !== 1 ? "s" : ""} connected
@@ -100,11 +100,11 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
           </div>
 
           {/* Security Info */}
-          <Alert className="border-success/30 bg-success/5">
-            <Shield className="h-4 w-4 text-success" />
-            <AlertDescription className="text-sm text-foreground">
-              <span className="font-medium text-success">Secure Connection:</span> We use Google's OAuth 2.0 for secure
-              authentication. Your passwords are never stored or accessed.
+          <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+            <Shield className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-sm text-green-800 dark:text-green-200">
+              <strong>Secure Connection:</strong> We use Google's OAuth 2.0 for secure authentication. Your passwords
+              are never stored or accessed.
             </AlertDescription>
           </Alert>
 
@@ -113,19 +113,19 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             <h4 className="text-sm font-medium text-foreground">What happens next:</h4>
             <div className="space-y-2">
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 border border-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-medium text-primary">1</span>
                 </div>
                 <p className="text-sm text-muted-foreground">Google will open in a new window</p>
               </div>
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 border border-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-medium text-primary">2</span>
                 </div>
                 <p className="text-sm text-muted-foreground">Choose the Gmail account you want to connect</p>
               </div>
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary/10 border border-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-medium text-primary">3</span>
                 </div>
                 <p className="text-sm text-muted-foreground">Grant permissions to read and manage emails</p>
@@ -135,11 +135,11 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
 
           {/* Development Warning */}
           {process.env.NODE_ENV === "development" && (
-            <Alert className="border-warning/30 bg-warning/5">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <AlertDescription className="text-xs text-foreground">
-                <span className="font-medium text-warning">Development Mode:</span> If you see "Access blocked", you
-                need to add your email as a test user in Google Cloud Console.
+            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
+                <strong>Development Mode:</strong> If you see "Access blocked", you need to add your email as a test
+                user in Google Cloud Console.
               </AlertDescription>
             </Alert>
           )}
@@ -149,7 +149,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             <Button
               onClick={handleConnectAccount}
               disabled={isConnecting}
-              className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-elevation-2 hover:shadow-elevation-3 transition-all duration-200"
+              className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
             >
               {isConnecting ? (
                 <>
@@ -163,12 +163,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
                 </>
               )}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsOpen(false)}
-              disabled={isConnecting}
-              className="border-border hover:bg-accent hover:text-accent-foreground"
-            >
+            <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isConnecting}>
               Cancel
             </Button>
           </div>
