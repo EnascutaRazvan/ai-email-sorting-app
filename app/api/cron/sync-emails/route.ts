@@ -1,40 +1,31 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Verify cron secret to prevent unauthorized access
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Call the bulk sync API
-    const syncResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/emails/sync-all`, {
+    // Call the sync-all endpoint
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/emails/sync-all`, {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
         "Content-Type": "application/json",
       },
     })
 
-    if (!syncResponse.ok) {
-      throw new Error(`Sync failed: ${syncResponse.statusText}`)
+    const data = await response.json()
+
+    if (data.success) {
+      console.log(`Cron job completed: ${data.totalImported} emails imported`)
+      return NextResponse.json({
+        success: true,
+        message: data.message,
+        imported: data.totalImported,
+      })
+    } else {
+      console.error("Cron job failed:", data.error)
+      return NextResponse.json({ error: data.error }, { status: 500 })
     }
-
-    const result = await syncResponse.json()
-
-    console.log("Scheduled email sync completed:", result)
-
-    return NextResponse.json({
-      success: true,
-      message: "Email sync completed",
-      ...result,
-    })
   } catch (error) {
-    console.error("Cron sync error:", error)
-    return NextResponse.json({ error: "Sync failed" }, { status: 500 })
+    console.error("Cron job error:", error)
+    return NextResponse.json({ error: "Cron job failed" }, { status: 500 })
   }
-}
-
-export async function POST(request: NextRequest) {
-  return GET(request)
 }
