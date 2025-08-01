@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS emails (
   sender TEXT NOT NULL,
   snippet TEXT,
   ai_summary TEXT,
+  email_body TEXT, -- Added column to store full email content
   received_at TIMESTAMP WITH TIME ZONE NOT NULL,
   is_read BOOLEAN DEFAULT FALSE,
   is_archived BOOLEAN DEFAULT FALSE,
@@ -87,6 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_emails_category_id ON emails(category_id);
 CREATE INDEX IF NOT EXISTS idx_emails_received_at ON emails(received_at);
 CREATE INDEX IF NOT EXISTS idx_email_processing_jobs_user_id ON email_processing_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_unsubscribe_jobs_user_id ON unsubscribe_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_emails_body_search ON emails USING gin(to_tsvector('english', email_body)); -- Added index for email body search
 
 -- Row Level Security (RLS) policies
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

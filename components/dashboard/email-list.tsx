@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Mail, Trash2, Unlink, RefreshCw, User, Calendar, Inbox, Star, Send } from "lucide-react"
+import { EmailDetailDialog } from "./email-detail-dialog"
 
 interface Email {
   id: string
@@ -37,6 +38,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
+  const [isEmailDetailOpen, setIsEmailDetailOpen] = useState(false)
 
   useEffect(() => {
     fetchEmails()
@@ -140,6 +143,16 @@ export function EmailList({ selectedCategory }: EmailListProps) {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleEmailClick = (emailId: string) => {
+    setSelectedEmailId(emailId)
+    setIsEmailDetailOpen(true)
+  }
+
+  const handleCloseEmailDetail = () => {
+    setIsEmailDetailOpen(false)
+    setSelectedEmailId(null)
   }
 
   // Filter emails based on active tab
@@ -325,7 +338,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                   {accountEmails.map((email) => (
                     <div
                       key={email.id}
-                      className={`group bg-white border border-gray-200/50 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
+                      onClick={() => handleEmailClick(email.id)}
+                      className={`group bg-white border border-gray-200/50 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-blue-200 cursor-pointer ${
                         selectedEmails.has(email.id) ? "bg-blue-50 border-blue-200 shadow-sm" : ""
                       } ${!email.is_read ? "bg-gradient-to-r from-blue-50/30 to-transparent" : ""}`}
                     >
@@ -333,6 +347,7 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                         <Checkbox
                           checked={selectedEmails.has(email.id)}
                           onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
                           className="mt-1"
                         />
 
@@ -390,6 +405,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
             ))}
           </div>
         )}
+        {/* Email Detail Dialog */}
+        <EmailDetailDialog emailId={selectedEmailId} isOpen={isEmailDetailOpen} onClose={handleCloseEmailDetail} />
       </CardContent>
     </Card>
   )

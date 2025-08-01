@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
+import { EmailImportButton } from "./email-import-button"
 
 interface ConnectedAccount {
   id: string
@@ -250,6 +251,9 @@ export function ConnectedAccounts() {
             ))}
           </div>
         )}
+
+        {/* Email Import Button */}
+        {accounts.length > 0 && <EmailImportButton accounts={accounts} onAccountConnected={fetchConnectedAccounts} />}
 
         {/* Connection Dialog */}
         <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
