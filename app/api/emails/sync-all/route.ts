@@ -5,25 +5,15 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify the request is from a cron job or authorized source
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Get all active user accounts
-    const { data: accounts, error: accountsError } = await supabase
-      .from("user_accounts")
-      .select("id, user_id, email, access_token")
-      .eq("is_primary", true) // Only sync primary accounts to avoid duplicates
+    const { data: accounts, error } = await supabase.from("user_accounts").select("*").eq("is_primary", true) // Only sync primary accounts to avoid rate limits
 
-    if (accountsError) {
-      console.error("Error fetching accounts:", accountsError)
-      return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 })
+    if (error) {
+      throw error
     }
 
-    let totalImported = 0
     let totalProcessed = 0
+    let totalNewEmails = 0
     const results = []
 
     for (const account of accounts || []) {
@@ -33,56 +23,51 @@ export async function POST(request: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.CRON_SECRET}`,
           },
           body: JSON.stringify({
             accountId: account.id,
-            isScheduled: true,
-            userId: account.user_id, // Pass user ID for scheduled imports
+            userId: account.user_id,
           }),
         })
 
         if (importResponse.ok) {
-          const importData = await importResponse.json()
-          totalImported += importData.imported
-          totalProcessed += importData.processed
-
+          const result = await importResponse.json()
+          totalProcessed += result.processed || 0
+          totalNewEmails += result.newEmails || 0
           results.push({
             accountId: account.id,
             email: account.email,
-            imported: importData.imported,
-            processed: importData.processed,
             success: true,
+            ...result,
           })
         } else {
           results.push({
             accountId: account.id,
             email: account.email,
-            error: "Import failed",
             success: false,
+            error: "Import failed",
           })
         }
       } catch (error) {
-        console.error(`Error syncing account ${account.email}:`, error)
+        console.error(`Error syncing account ${account.id}:`, error)
         results.push({
           accountId: account.id,
           email: account.email,
-          error: error.message,
           success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
         })
       }
     }
 
     return NextResponse.json({
       success: true,
-      totalImported,
+      totalAccounts: accounts?.length || 0,
       totalProcessed,
-      accountsProcessed: accounts?.length || 0,
+      totalNewEmails,
       results,
-      message: `Sync completed: ${totalImported} emails imported from ${accounts?.length || 0} accounts`,
     })
   } catch (error) {
-    console.error("Sync all error:", error)
+    console.error("Bulk sync error:", error)
     return NextResponse.json({ error: "Failed to sync emails" }, { status: 500 })
   }
 }
