@@ -24,83 +24,122 @@
 
 @layer base {
   :root {
-    /* Light mode - Soft, eye-friendly colors */
-    --background: 248 250 252; /* slate-50 */
-    --foreground: 15 23 42; /* slate-800 */
-    --card: 255 255 255; /* white */
-    --card-foreground: 15 23 42; /* slate-800 */
-    --popover: 255 255 255;
-    --popover-foreground: 15 23 42;
-    --primary: 59 130 246; /* blue-500 */
-    --primary-foreground: 255 255 255;
-    --secondary: 241 245 249; /* slate-100 */
-    --secondary-foreground: 51 65 85; /* slate-600 */
-    --muted: 248 250 252; /* slate-50 */
-    --muted-foreground: 100 116 139; /* slate-500 */
-    --accent: 239 246 255; /* blue-50 */
-    --accent-foreground: 30 64 175; /* blue-800 */
-    --destructive: 239 68 68; /* red-500 */
-    --destructive-foreground: 255 255 255;
-    --border: 226 232 240; /* slate-200 */
-    --input: 241 245 249; /* slate-100 */
-    --ring: 59 130 246; /* blue-500 */
+    /* Light Mode - Modern Web App Colors */
+    --primary: 59 130 246; /* #3b82f6 - Blue-500 */
+    --primary-foreground: 255 255 255; /* White text on primary */
+
+    --background: 255 255 255; /* #ffffff - Main app background */
+    --foreground: 17 24 39; /* #111827 - Gray-900 - Primary text */
+
+    --surface: 249 250 251; /* #f9fafb - Cards, modals, sidebars */
+    --surface-foreground: 17 24 39; /* #111827 - Text on surface */
+
+    --card: 249 250 251; /* #f9fafb - Card background */
+    --card-foreground: 17 24 39; /* #111827 - Card text */
+
+    --popover: 255 255 255; /* White popover background */
+    --popover-foreground: 17 24 39; /* #111827 - Popover text */
+
+    --secondary: 107 114 128; /* #6b7280 - Gray-500 - Secondary text */
+    --secondary-foreground: 255 255 255; /* White on secondary */
+
+    --muted: 249 250 251; /* #f9fafb - Muted backgrounds */
+    --muted-foreground: 107 114 128; /* #6b7280 - Gray-500 - Subtle text */
+
+    --accent: 139 92 246; /* #8b5cf6 - Purple-400 - Toggles, highlights */
+    --accent-foreground: 255 255 255; /* White on accent */
+
+    --destructive: 239 68 68; /* #ef4444 - Red-500 - Error alerts */
+    --destructive-foreground: 255 255 255; /* White on destructive */
+
+    --border: 229 231 235; /* #e5e7eb - Gray-200 - Dividers, borders */
+    --input: 249 250 251; /* #f9fafb - Input background */
+    --ring: 59 130 246; /* #3b82f6 - Focus ring */
+
+    /* Semantic Colors */
+    --success: 16 185 129; /* #10b981 - Emerald-500 */
+    --success-foreground: 255 255 255;
+    --warning: 245 158 11; /* #f59e0b - Amber-500 */
+    --warning-foreground: 255 255 255;
+    --error: 239 68 68; /* #ef4444 - Red-500 */
+    --error-foreground: 255 255 255;
+    --info: 59 130 246; /* #3b82f6 - Blue-500 */
+    --info-foreground: 255 255 255;
+
+    /* Surface Elevation */
+    --surface-1: 255 255 255; /* Base surface */
+    --surface-2: 249 250 251; /* Raised surface */
+    --surface-3: 243 244 246; /* Floating surface */
+
     --radius: 0.75rem;
 
-    /* Chart colors */
-    --chart-1: 59 130 246; /* blue-500 */
-    --chart-2: 16 185 129; /* emerald-500 */
-    --chart-3: 245 101 101; /* red-400 */
-    --chart-4: 251 191 36; /* amber-400 */
-    --chart-5: 168 85 247; /* purple-500 */
-
-    /* Sidebar colors */
-    --sidebar-background: 255 255 255;
-    --sidebar-foreground: 15 23 42;
-    --sidebar-primary: 59 130 246;
+    /* Sidebar specific */
+    --sidebar-background: 249 250 251; /* #f9fafb */
+    --sidebar-foreground: 17 24 39; /* #111827 */
+    --sidebar-primary: 59 130 246; /* #3b82f6 */
     --sidebar-primary-foreground: 255 255 255;
-    --sidebar-accent: 241 245 249;
-    --sidebar-accent-foreground: 15 23 42;
-    --sidebar-border: 226 232 240;
+    --sidebar-accent: 243 244 246; /* #f3f4f6 */
+    --sidebar-accent-foreground: 17 24 39;
+    --sidebar-border: 229 231 235; /* #e5e7eb */
     --sidebar-ring: 59 130 246;
   }
 
   .dark {
-    /* Dark mode - Soft, pleasant dark colors */
-    --background: 15 23 42; /* slate-800 */
-    --foreground: 248 250 252; /* slate-50 */
-    --card: 30 41 59; /* slate-700 */
-    --card-foreground: 248 250 252; /* slate-50 */
-    --popover: 30 41 59;
-    --popover-foreground: 248 250 252;
-    --primary: 96 165 250; /* blue-400 */
-    --primary-foreground: 15 23 42;
-    --secondary: 51 65 85; /* slate-600 */
-    --secondary-foreground: 226 232 240; /* slate-200 */
-    --muted: 51 65 85; /* slate-600 */
-    --muted-foreground: 148 163 184; /* slate-400 */
-    --accent: 30 58 138; /* blue-900 */
-    --accent-foreground: 191 219 254; /* blue-200 */
-    --destructive: 248 113 113; /* red-400 */
-    --destructive-foreground: 15 23 42;
-    --border: 51 65 85; /* slate-600 */
-    --input: 51 65 85; /* slate-600 */
-    --ring: 96 165 250; /* blue-400 */
+    /* Dark Mode - Modern Web App Colors */
+    --primary: 96 165 250; /* #60a5fa - Blue-400 - Softer glow */
+    --primary-foreground: 26 26 26; /* Dark text on primary */
 
-    /* Chart colors for dark mode */
-    --chart-1: 96 165 250; /* blue-400 */
-    --chart-2: 52 211 153; /* emerald-400 */
-    --chart-3: 248 113 113; /* red-400 */
-    --chart-4: 251 191 36; /* amber-400 */
-    --chart-5: 196 181 253; /* purple-300 */
+    --background: 26 26 26; /* #1a1a1a - Dark app background */
+    --foreground: 243 244 246; /* #f3f4f6 - Gray-100 - Light text */
 
-    /* Sidebar colors for dark mode */
-    --sidebar-background: 30 41 59;
-    --sidebar-foreground: 248 250 252;
-    --sidebar-primary: 96 165 250;
-    --sidebar-primary-foreground: 15 23 42;
-    --sidebar-accent: 51 65 85;
-    --sidebar-accent-foreground: 248 250 252;
-    --sidebar-border: 51 65 85;
+    --surface: 45 45 45; /* #2d2d2d - Cards, modals (elevated) */
+    --surface-foreground: 243 244 246; /* #f3f4f6 - Text on surface */
+
+    --card: 45 45 45; /* #2d2d2d - Card background */
+    --card-foreground: 243 244 246; /* #f3f4f6 - Card text */
+
+    --popover: 45 45 45; /* #2d2d2d - Popover background */
+    --popover-foreground: 243 244 246; /* #f3f4f6 - Popover text */
+
+    --secondary: 156 163 175; /* #9ca3af - Gray-400 - Secondary dark text */
+    --secondary-foreground: 26 26 26; /* Dark text on secondary */
+
+    --muted: 45 45 45; /* #2d2d2d - Muted backgrounds */
+    --muted-foreground: 156 163 175; /* #9ca3af - Gray-400 - Secondary text */
+
+    --accent: 167 139 250; /* #a78bfa - Purple-300 - Glow effects */
+    --accent-foreground: 26 26 26; /* Dark text on accent */
+
+    --destructive: 248 113 113; /* #f87171 - Red-400 - Softer error */
+    --destructive-foreground: 26 26 26; /* Dark text on destructive */
+
+    --border: 55 65 81; /* #374151 - Gray-700 - Subtle borders */
+    --input: 45 45 45; /* #2d2d2d - Input background */
+    --ring: 96 165 250; /* #60a5fa - Focus ring */
+
+    /* Semantic Colors - Dark Mode */
+    --success: 52 211 153; /* #34d399 - Emerald-400 */
+    --success-foreground: 26 26 26;
+    --warning: 251 191 36; /* #fbbf24 - Amber-400 */
+    --warning-foreground: 26 26 26;
+    --error: 248 113 113; /* #f87171 - Red-400 */
+    --error-foreground: 26 26 26;
+    --info: 96 165 250; /* #60a5fa - Blue-400 */
+    --info-foreground: 26 26 26;
+
+    /* Surface Elevation - Dark Mode */
+    --surface-1: 26 26 26; /* Base surface */
+    --surface-2: 45 45 45; /* Raised surface */
+    --surface-3: 55 65 81; /* Floating surface */
+
+    /* Sidebar specific - Dark Mode */
+    --sidebar-background: 45 45 45; /* #2d2d2d */
+    --sidebar-foreground: 243 244 246; /* #f3f4f6 */
+    --sidebar-primary: 96 165 250; /* #60a5fa */
+    --sidebar-primary-foreground: 26 26 26;
+    --sidebar-accent: 55 65 81; /* #374151 */
+    --sidebar-accent-foreground: 243 244 246;
+    --sidebar-border: 55 65 81; /* #374151 */
     --sidebar-ring: 96 165 250;
   }
 }
@@ -121,27 +160,88 @@
     scroll-behavior: smooth;
   }
 
-  /* Better focus styles */
+  /* Better focus styles with proper contrast */
   *:focus-visible {
-    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar with theme colors */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-muted;
+    background: rgb(var(--muted));
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
+    background: rgb(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    background: rgb(var(--muted-foreground) / 0.5);
+  }
+}
+
+/* Component-specific styles */
+@layer components {
+  /* Button variants with proper colors */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+
+  /* Surface elevation system */
+  .surface-1 {
+    background: rgb(var(--surface-1));
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+
+  .surface-2 {
+    background: rgb(var(--surface-2));
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+
+  .surface-3 {
+    background: rgb(var(--surface-3));
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+
+  /* Glass morphism with theme awareness */
+  .glass {
+    background: rgb(var(--card) / 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgb(var(--border) / 0.5);
+  }
+
+  /* Status indicators */
+  .status-success {
+    @apply bg-success text-success-foreground;
+  }
+
+  .status-warning {
+    @apply bg-warning text-warning-foreground;
+  }
+
+  .status-error {
+    @apply bg-error text-error-foreground;
+  }
+
+  .status-info {
+    @apply bg-info text-info-foreground;
   }
 }
 
@@ -175,12 +275,29 @@
   animation: fadeIn 0.3s ease-out;
 }
 
-/* Glass morphism effect */
-.glass {
-  @apply bg-card/80 backdrop-blur-sm border border-border/50;
+/* Theme transition for all elements */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Theme transition */
-* {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: 0 0 0; /* Pure black borders in high contrast */
+  }
+
+  .dark {
+    --border: 255 255 255; /* Pure white borders in dark high contrast */
+  }
 }

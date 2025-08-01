@@ -173,14 +173,14 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
   if (isLoading) {
     return (
-      <Card className="h-full glass">
-        <CardHeader className="pb-3">
+      <Card className="h-full bg-surface border-border shadow-elevation-2">
+        <CardHeader className="pb-3 bg-surface-1 rounded-t-lg border-b border-border">
           <CardTitle className="text-base font-semibold text-foreground">Email Inbox</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="animate-pulse space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-muted/50 rounded-xl p-4">
+              <div key={i} className="bg-surface-2 rounded-xl p-4 border border-border">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-muted rounded-full" />
                   <div className="flex-1 space-y-2">
@@ -198,13 +198,13 @@ export function EmailList({ selectedCategory }: EmailListProps) {
   }
 
   return (
-    <Card className="h-full glass">
-      <CardHeader className="pb-3">
+    <Card className="h-full bg-surface border-border shadow-elevation-2">
+      <CardHeader className="pb-3 bg-surface-1 rounded-t-lg border-b border-border">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <CardTitle className="text-base font-semibold text-foreground flex items-center">
             <Inbox className="mr-2 h-4 w-4 text-primary" />
             Email Inbox
-            <Badge variant="secondary" className="ml-2 text-xs">
+            <Badge variant="secondary" className="ml-2 text-xs bg-accent/20 text-accent-foreground border-accent/30">
               {filteredEmails.length}
             </Badge>
           </CardTitle>
@@ -214,7 +214,7 @@ export function EmailList({ selectedCategory }: EmailListProps) {
               variant="outline"
               size="sm"
               disabled={isLoading}
-              className="text-xs bg-transparent"
+              className="text-xs border-border hover:bg-accent hover:text-accent-foreground bg-transparent"
             >
               <RefreshCw className={`mr-2 h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
@@ -224,20 +224,32 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
         {/* Email Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-4 bg-muted/50">
-            <TabsTrigger value="all" className="text-xs">
+          <TabsList className="grid w-full grid-cols-4 bg-surface-2 border border-border">
+            <TabsTrigger
+              value="all"
+              className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               <Mail className="mr-1 h-3 w-3" />
               All
             </TabsTrigger>
-            <TabsTrigger value="unread" className="text-xs">
+            <TabsTrigger
+              value="unread"
+              className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               <div className="w-2 h-2 bg-primary rounded-full mr-1" />
               Unread
             </TabsTrigger>
-            <TabsTrigger value="important" className="text-xs">
+            <TabsTrigger
+              value="important"
+              className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               <Star className="mr-1 h-3 w-3" />
               Important
             </TabsTrigger>
-            <TabsTrigger value="sent" className="text-xs">
+            <TabsTrigger
+              value="sent"
+              className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               <Send className="mr-1 h-3 w-3" />
               Sent
             </TabsTrigger>
@@ -245,14 +257,14 @@ export function EmailList({ selectedCategory }: EmailListProps) {
         </Tabs>
 
         {selectedEmails.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-border">
+          <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-border bg-surface-2 px-4 py-3 rounded-lg mt-4">
             <span className="text-sm text-muted-foreground">{selectedEmails.size} selected</span>
             <Button
               onClick={handleBulkDelete}
               variant="destructive"
               size="sm"
               disabled={isProcessing}
-              className="text-xs"
+              className="text-xs bg-error hover:bg-error/90 text-error-foreground"
             >
               <Trash2 className="mr-1 h-3 w-3" />
               Delete
@@ -262,7 +274,7 @@ export function EmailList({ selectedCategory }: EmailListProps) {
               variant="outline"
               size="sm"
               disabled={isProcessing}
-              className="text-xs bg-transparent"
+              className="text-xs border-border hover:bg-accent hover:text-accent-foreground bg-transparent"
             >
               <Unlink className="mr-1 h-3 w-3" />
               Unsubscribe
@@ -271,17 +283,21 @@ export function EmailList({ selectedCategory }: EmailListProps) {
         )}
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 p-6">
         {filteredEmails.length > 0 && (
           <div className="flex items-center space-x-2 pb-2 border-b border-border">
-            <Checkbox checked={selectedEmails.size === filteredEmails.length} onCheckedChange={handleSelectAll} />
+            <Checkbox
+              checked={selectedEmails.size === filteredEmails.length}
+              onCheckedChange={handleSelectAll}
+              className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+            />
             <span className="text-sm text-muted-foreground">Select all</span>
           </div>
         )}
 
         {filteredEmails.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-muted to-muted/50 rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-muted to-surface-2 rounded-full flex items-center justify-center shadow-elevation-1">
               <Mail className="h-8 w-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">No emails found</h3>
@@ -296,8 +312,8 @@ export function EmailList({ selectedCategory }: EmailListProps) {
             {Object.entries(emailsByAccount).map(([accountEmail, { account, emails: accountEmails }]) => (
               <div key={accountEmail} className="space-y-3">
                 {/* Account Header */}
-                <div className="flex items-center space-x-3 pb-2 border-b border-border">
-                  <Avatar className="h-6 w-6">
+                <div className="flex items-center space-x-3 pb-2 border-b border-border bg-surface-1 p-3 rounded-lg">
+                  <Avatar className="h-6 w-6 shadow-elevation-1">
                     <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
                     <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-xs">
                       {account.name ? (
@@ -315,7 +331,7 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                     <p className="text-sm font-medium text-foreground">{account.email}</p>
                     {account.name && <p className="text-xs text-muted-foreground">{account.name}</p>}
                   </div>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs border-border">
                     {accountEmails.length} emails
                   </Badge>
                 </div>
@@ -325,15 +341,15 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                   {accountEmails.map((email) => (
                     <div
                       key={email.id}
-                      className={`group bg-card border border-border rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-primary/30 ${
-                        selectedEmails.has(email.id) ? "bg-primary/5 border-primary/30 shadow-sm" : ""
-                      } ${!email.is_read ? "bg-gradient-to-r from-primary/5 to-transparent" : ""}`}
+                      className={`group bg-surface-1 border border-border rounded-xl p-4 transition-all duration-200 hover:shadow-elevation-2 hover:border-primary/30 hover:bg-surface-2 ${
+                        selectedEmails.has(email.id) ? "bg-primary/5 border-primary/30 shadow-elevation-1" : ""
+                      } ${!email.is_read ? "bg-gradient-to-r from-primary/5 to-transparent border-primary/20" : ""}`}
                     >
                       <div className="flex items-start space-x-3">
                         <Checkbox
                           checked={selectedEmails.has(email.id)}
                           onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
-                          className="mt-1"
+                          className="mt-1 border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                         />
 
                         <div className="flex-1 min-w-0 space-y-2">
@@ -350,9 +366,9 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                               {email.category_name && (
                                 <Badge
                                   variant="secondary"
-                                  className="text-xs px-2 py-0.5"
+                                  className="text-xs px-2 py-0.5 border"
                                   style={{
-                                    backgroundColor: `${email.category_color}20`,
+                                    backgroundColor: `${email.category_color}15`,
                                     color: email.category_color,
                                     borderColor: `${email.category_color}30`,
                                   }}
@@ -373,9 +389,9 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                           </div>
 
                           {email.ai_summary && (
-                            <div className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-lg p-3">
+                            <div className="bg-gradient-to-r from-info/5 to-info/10 border border-info/20 rounded-lg p-3">
                               <p className="text-sm text-foreground">
-                                <span className="font-medium">AI Summary:</span> {email.ai_summary}
+                                <span className="font-medium text-info">AI Summary:</span> {email.ai_summary}
                               </p>
                             </div>
                           )}

@@ -134,14 +134,14 @@ export function ConnectedAccounts() {
 
   if (isLoading) {
     return (
-      <Card className="glass">
-        <CardHeader className="pb-3">
+      <Card className="bg-surface border-border shadow-elevation-2">
+        <CardHeader className="pb-3 bg-surface-1 rounded-t-lg">
           <CardTitle className="text-base font-semibold text-foreground">Connected Accounts</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 p-6">
           <div className="animate-pulse space-y-3">
             {[1, 2].map((i) => (
-              <div key={i} className="flex items-center space-x-3 p-3 bg-muted/50 rounded-xl">
+              <div key={i} className="flex items-center space-x-3 p-4 bg-surface-2 rounded-xl">
                 <div className="w-10 h-10 bg-muted rounded-full" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 bg-muted rounded w-3/4" />
@@ -156,30 +156,31 @@ export function ConnectedAccounts() {
   }
 
   return (
-    <Card className="glass">
-      <CardHeader className="pb-3">
+    <Card className="bg-surface border-border shadow-elevation-2">
+      <CardHeader className="pb-3 bg-surface-1 rounded-t-lg border-b border-border">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold text-foreground flex items-center">
             <Mail className="mr-2 h-4 w-4 text-primary" />
             Gmail Accounts
-            <Badge variant="secondary" className="ml-2 text-xs">
+            <Badge variant="secondary" className="ml-2 text-xs bg-accent/20 text-accent-foreground border-accent/30">
               {accounts.length}
             </Badge>
           </CardTitle>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         {/* Security Notice */}
-        <Alert className="border-primary/20 bg-primary/5">
-          <Shield className="h-4 w-4 text-primary" />
+        <Alert className="border-info/30 bg-info/5">
+          <Shield className="h-4 w-4 text-info" />
           <AlertDescription className="text-xs text-foreground">
-            Secured with Google OAuth 2.0. Your credentials are never stored.
+            <span className="font-medium text-info">Secured with Google OAuth 2.0.</span> Your credentials are never
+            stored.
           </AlertDescription>
         </Alert>
 
         {accounts.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full flex items-center justify-center shadow-elevation-1">
               <Mail className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">Connect Your Gmail</h3>
@@ -192,11 +193,11 @@ export function ConnectedAccounts() {
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className="group relative bg-card border border-border rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-primary/30"
+                className="group relative bg-surface-1 border border-border rounded-xl p-4 hover:shadow-elevation-2 transition-all duration-200 hover:border-primary/30 hover:bg-surface-2"
               >
                 <div className="flex items-center space-x-3">
                   <div className="relative">
-                    <Avatar className="h-10 w-10 ring-2 ring-background shadow-sm">
+                    <Avatar className="h-10 w-10 ring-2 ring-background shadow-elevation-1">
                       <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
                       <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-sm font-medium">
                         {account.name ? (
@@ -210,8 +211,8 @@ export function ConnectedAccounts() {
                         )}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-background rounded-full flex items-center justify-center">
-                      <CheckCircle className="h-2.5 w-2.5 text-white" />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-success border-2 border-background rounded-full flex items-center justify-center">
+                      <CheckCircle className="h-2.5 w-2.5 text-success-foreground" />
                     </div>
                   </div>
 
@@ -219,7 +220,7 @@ export function ConnectedAccounts() {
                     <div className="flex items-center space-x-2 mb-1">
                       <p className="font-medium text-sm text-foreground truncate">{account.email}</p>
                       {account.is_primary && (
-                        <Badge className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground text-xs px-2 py-0.5">
+                        <Badge className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground text-xs px-2 py-0.5 shadow-elevation-1">
                           Primary
                         </Badge>
                       )}
@@ -228,7 +229,7 @@ export function ConnectedAccounts() {
                     {account.name && <p className="text-xs text-muted-foreground truncate mb-1">{account.name}</p>}
 
                     <div className="flex items-center text-xs text-muted-foreground">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
+                      <div className="w-1.5 h-1.5 bg-success rounded-full mr-2" />
                       Connected {new Date(account.created_at).toLocaleDateString()}
                     </div>
                   </div>
@@ -239,7 +240,7 @@ export function ConnectedAccounts() {
                         onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all duration-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -256,10 +257,11 @@ export function ConnectedAccounts() {
 
         {/* Development Notice */}
         {process.env.NODE_ENV === "development" && (
-          <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
-              <strong>Dev Mode:</strong> Configure Google Cloud Console if you encounter OAuth errors.
+          <Alert className="border-warning/30 bg-warning/5">
+            <AlertCircle className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-xs text-foreground">
+              <span className="font-medium text-warning">Dev Mode:</span> Configure Google Cloud Console if you
+              encounter OAuth errors.
             </AlertDescription>
           </Alert>
         )}
