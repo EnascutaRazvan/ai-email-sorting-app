@@ -38,15 +38,19 @@ const handler = NextAuth({
           }
 
           // Store account information
-          const { error: accountError } = await supabase.from("user_accounts").upsert({
-            user_id: user.id,
-            gmail_id: account.providerAccountId,
-            access_token: account.access_token,
-            refresh_token: account.refresh_token,
-            email: user.email,
-            is_primary: true,
-            updated_at: new Date().toISOString(),
-          })
+          const { error: accountError } = await supabase
+            .from("user_accounts")
+            .upsert({
+              user_id: user.id,
+              gmail_id: account.providerAccountId,
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              email: user.email,
+              is_primary: true,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'user_id,gmail_id',
+            })
 
           if (accountError) {
             console.error("Error storing account:", accountError)
