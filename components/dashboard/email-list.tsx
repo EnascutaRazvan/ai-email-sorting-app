@@ -372,7 +372,7 @@ export function EmailList({ selectedCategory }: EmailListProps) {
                             <span className="truncate">{email.sender}</span>
                           </div>
 
-                          {email.ai_summary && (
+                          {email.ai_summary && email.ai_summary !== email.snippet && (
                             <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-lg p-3">
                               <p className="text-sm text-indigo-900">
                                 <span className="font-medium">AI Summary:</span> {email.ai_summary}

@@ -10,6 +10,7 @@ import { Categories } from "@/components/dashboard/categories"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu } from "lucide-react"
+import { EmailProcessingStatus } from "@/components/dashboard/email-processing-status"
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const SidebarContent = () => (
     <div className="space-y-6 p-6 h-full bg-gradient-to-b from-gray-50 to-white">
       <ConnectedAccounts />
+      <EmailProcessingStatus />
       <Categories selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} />
     </div>
   )

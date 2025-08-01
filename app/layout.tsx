@@ -3,15 +3,14 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/components/providers"
-import { Toaster } from "@/components/ui/toaster"
-import { Analytics } from "@vercel/analytics/next"
+import { Toaster } from "@/components/ui/sonner"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AI Email Sorting App",
-  description: "AI-powered email categorization and management",
-  generator: "v0.dev",
+  title: "AI Email Sorter",
+  description: "Intelligent email organization powered by AI",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -25,7 +24,6 @@ export default function RootLayout({
         <Providers>
           {children}
           <Toaster />
-          <Analytics />
         </Providers>
       </body>
     </html>
