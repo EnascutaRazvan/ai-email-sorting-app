@@ -1,34 +1,66 @@
--- Create default categories for existing users who don't have any categories yet
-
-INSERT INTO categories (user_id, name, color, description, is_default)
+-- Create default categories for new users
+INSERT INTO categories (user_id, name, description, color) 
 SELECT 
-  u.id as user_id,
-  category_data.name,
-  category_data.color,
-  category_data.description,
-  TRUE as is_default
+    u.id,
+    'Work',
+    'Work-related emails and professional correspondence',
+    '#3B82F6'
 FROM users u
-CROSS JOIN (
-  VALUES 
-    ('Work', '#3B82F6', 'Work-related emails and professional correspondence'),
-    ('Personal', '#10B981', 'Personal emails from friends and family'),
-    ('Shopping', '#F59E0B', 'E-commerce, receipts, and shopping-related emails'),
-    ('Newsletters', '#8B5CF6', 'Newsletters, subscriptions, and regular updates'),
-    ('Promotions', '#EF4444', 'Marketing emails, deals, and promotional content'),
-    ('Social', '#06B6D4', 'Social media notifications and community updates')
-) AS category_data(name, color, description)
 WHERE NOT EXISTS (
-  SELECT 1 FROM categories c 
-  WHERE c.user_id = u.id 
-  AND c.name = category_data.name
-)
-ON CONFLICT (user_id, name) DO NOTHING;
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Work'
+);
 
--- Update the count of categories created
-DO $$
-DECLARE
-  category_count INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO category_count FROM categories WHERE is_default = TRUE;
-  RAISE NOTICE 'Created default categories. Total default categories: %', category_count;
-END $$;
+INSERT INTO categories (user_id, name, description, color) 
+SELECT 
+    u.id,
+    'Personal',
+    'Personal emails from friends and family',
+    '#10B981'
+FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Personal'
+);
+
+INSERT INTO categories (user_id, name, description, color) 
+SELECT 
+    u.id,
+    'Shopping',
+    'E-commerce, receipts, and shopping-related emails',
+    '#F59E0B'
+FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Shopping'
+);
+
+INSERT INTO categories (user_id, name, description, color) 
+SELECT 
+    u.id,
+    'Newsletters',
+    'Newsletters, updates, and subscription emails',
+    '#8B5CF6'
+FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Newsletters'
+);
+
+INSERT INTO categories (user_id, name, description, color) 
+SELECT 
+    u.id,
+    'Promotions',
+    'Marketing emails, deals, and promotional content',
+    '#EF4444'
+FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Promotions'
+);
+
+INSERT INTO categories (user_id, name, description, color) 
+SELECT 
+    u.id,
+    'Social',
+    'Social media notifications and updates',
+    '#06B6D4'
+FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM categories c WHERE c.user_id = u.id AND c.name = 'Social'
+);
