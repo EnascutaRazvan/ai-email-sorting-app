@@ -1,12 +1,10 @@
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { createClient } from "@supabase/supabase-js"
-import type { NextAuthOptions } from "next-auth" // Import NextAuthOptions type
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export const authOptions: NextAuthOptions = {
-  // Export authOptions
+const handler = NextAuth({
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -23,7 +21,6 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      // console.log("signIn callback - user:", user) // Removed console.log
       if (account?.provider === "google") {
         try {
           // Store user in Supabase
@@ -41,8 +38,9 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Store account information
-          const { error: accountError } = await supabase.from("user_accounts").upsert(
-            {
+          const { error: accountError } = await supabase
+            .from("user_accounts")
+            .upsert({
               user_id: user.id,
               gmail_id: account.providerAccountId,
               access_token: account.access_token,
@@ -50,11 +48,9 @@ export const authOptions: NextAuthOptions = {
               email: user.email,
               is_primary: true,
               updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "user_id,gmail_id",
-            },
-          )
+            }, {
+              onConflict: 'user_id,gmail_id',
+            })
 
           if (accountError) {
             console.error("Error storing account:", accountError)
@@ -77,22 +73,17 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
       }
-      // console.log("jwt callback - token:", token) // Removed console.log
       return token
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
       session.user.id = token.id as string
-      // console.log("session callback - token:", token) // Removed console.log
-      // console.log("session callback - session:", session) // Removed console.log
       return session
     },
   },
   pages: {
     signIn: "/auth/signin",
   },
-}
-
-const handler = NextAuth(authOptions) // Pass authOptions to NextAuth
+})
 
 export { handler as GET, handler as POST }

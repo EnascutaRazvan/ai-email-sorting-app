@@ -1,16 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route" // Import authOptions
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) // Pass authOptions
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
-      console.log("Unauthorized access to /api/categories. Session:", session) // Keep for debugging
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -43,10 +41,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) // Pass authOptions
+    const session = await getServerSession()
 
     if (!session?.user?.id) {
-      console.log("Unauthorized access to /api/categories (POST). Session:", session) // Keep for debugging
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
