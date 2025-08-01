@@ -76,19 +76,28 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
     setIsProcessing(true)
     try {
-      const response = await fetch("/api/emails/bulk-delete", {
+      const response = await fetch("/api/emails/bulk-actions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "delete",
           emailIds: Array.from(selectedEmails),
         }),
       })
 
+      const result = await response.json()
+
       if (response.ok) {
         setEmails(emails.filter((email) => !selectedEmails.has(email.id)))
         setSelectedEmails(new Set())
+
+        if (result.errors && result.errors.length > 0) {
+          console.warn("Some emails failed to delete:", result.errors)
+        }
+      } else {
+        console.error("Failed to delete emails:", result.error)
       }
     } catch (error) {
       console.error("Error deleting emails:", error)
@@ -102,23 +111,27 @@ export function EmailList({ selectedCategory }: EmailListProps) {
 
     setIsProcessing(true)
     try {
-      const response = await fetch("/api/emails/bulk-unsubscribe", {
+      const response = await fetch("/api/emails/bulk-actions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "unsubscribe",
           emailIds: Array.from(selectedEmails),
         }),
       })
 
+      const result = await response.json()
+
       if (response.ok) {
-        // Refresh the email list
-        fetchEmails()
         setSelectedEmails(new Set())
+        console.log("Unsubscribe request processed:", result.message)
+      } else {
+        console.error("Failed to process unsubscribe:", result.error)
       }
     } catch (error) {
-      console.error("Error unsubscribing:", error)
+      console.error("Error processing unsubscribe:", error)
     } finally {
       setIsProcessing(false)
     }
@@ -128,8 +141,16 @@ export function EmailList({ selectedCategory }: EmailListProps) {
     setIsLoading(true)
     try {
       // Trigger email processing
-      await fetch("/api/emails/process", { method: "POST" })
-      // Refresh the list
+      const processResponse = await fetch("/api/emails/process", { method: "POST" })
+      const processResult = await processResponse.json()
+
+      if (processResponse.ok) {
+        console.log("Email processing completed:", processResult)
+      } else {
+        console.error("Email processing failed:", processResult.error)
+      }
+
+      // Refresh the email list
       await fetchEmails()
     } catch (error) {
       console.error("Error refreshing emails:", error)

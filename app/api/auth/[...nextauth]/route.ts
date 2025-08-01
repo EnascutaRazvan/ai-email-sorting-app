@@ -11,8 +11,13 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope:
-            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify",
+          scope: [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.modify",
+          ].join(" "),
           access_type: "offline",
           prompt: "consent",
         },
@@ -37,10 +42,9 @@ const handler = NextAuth({
             return false
           }
 
-          // Store account information
-          const { error: accountError } = await supabase
-            .from("user_accounts")
-            .upsert({
+          // Store account information with Gmail tokens
+          const { error: accountError } = await supabase.from("user_accounts").upsert(
+            {
               user_id: user.id,
               gmail_id: account.providerAccountId,
               access_token: account.access_token,
@@ -48,9 +52,11 @@ const handler = NextAuth({
               email: user.email,
               is_primary: true,
               updated_at: new Date().toISOString(),
-            }, {
-              onConflict: 'user_id,gmail_id',
-            })
+            },
+            {
+              onConflict: "user_id,gmail_id",
+            },
+          )
 
           if (accountError) {
             console.error("Error storing account:", accountError)
@@ -77,6 +83,7 @@ const handler = NextAuth({
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
+      session.refreshToken = token.refreshToken as string
       session.user.id = token.id as string
       return session
     },
