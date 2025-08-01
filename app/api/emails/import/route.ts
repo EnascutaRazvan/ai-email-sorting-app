@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { groq } from "@ai-sdk/groq"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -115,10 +115,10 @@ export async function POST(request: NextRequest) {
         // Extract email body
         const emailBody = extractEmailBody(message.payload)
 
-        // Generate AI summary
+        // Generate AI summary using Groq
         const aiSummary = await generateEmailSummary(subject, from, emailBody)
 
-        // Categorize email with AI
+        // Categorize email with AI using Groq
         const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
 
         // Store email in database
@@ -186,16 +186,18 @@ function extractEmailBody(payload: any): string {
 async function generateEmailSummary(subject: string, from: string, body: string): Promise<string> {
   try {
     const { text } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model: groq("llama-3.1-8b-instant"),
       prompt: `Summarize this email in 1-2 sentences. Focus on the main purpose and any action items.
 
 Subject: ${subject}
 From: ${from}
-Body: ${body.substring(0, 2000)}...`,
+Body: ${body.substring(0, 2000)}...
+
+Summary:`,
       maxTokens: 100,
     })
 
-    return text
+    return text.trim()
   } catch (error) {
     console.error("Error generating summary:", error)
     return "Unable to generate summary"
@@ -211,25 +213,29 @@ async function categorizeEmailWithAI(
   if (!categories.length) return null
 
   try {
-    const categoryList = categories.map((cat) => `${cat.name}: ${cat.description}`).join("\n")
+    const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
 
     const { text } = await generateText({
-      model: openai("gpt-4o-mini"),
-      prompt: `Categorize this email into one of the following categories. Respond with only the category name.
+      model: groq("llama-3.1-8b-instant"),
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
 
-Categories:
+Available Categories:
 ${categoryList}
 
-Email:
+Email to categorize:
 Subject: ${subject}
 From: ${from}
 Body: ${body.substring(0, 1000)}...
 
 Category:`,
-      maxTokens: 50,
+      maxTokens: 20,
     })
 
-    const selectedCategory = categories.find((cat) => cat.name.toLowerCase() === text.trim().toLowerCase())
+    const selectedCategory = categories.find(
+      (cat) =>
+        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
+        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
+    )
 
     return selectedCategory?.id || null
   } catch (error) {

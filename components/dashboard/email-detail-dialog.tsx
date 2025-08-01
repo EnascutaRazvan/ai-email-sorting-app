@@ -3,54 +3,59 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Calendar, Mail, Sparkles, Loader2 } from "lucide-react"
-import { showErrorToast } from "@/lib/error-handler"
+import { Separator } from "@/components/ui/separator"
+import { Loader2, Mail, Calendar, User, Tag } from "lucide-react"
+import { format } from "date-fns"
 
 interface EmailDetailDialogProps {
   emailId: string | null
-  isOpen: boolean
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 interface EmailContent {
   id: string
   subject: string
   sender: string
-  received_at: string
   body: string
-  ai_summary: string
+  summary: string
+  receivedAt: string
+  isRead: boolean
+  category?: {
+    name: string
+    color: string
+  }
+  account?: {
+    email: string
+  }
 }
 
-export function EmailDetailDialog({ emailId, isOpen, onClose }: EmailDetailDialogProps) {
-  const [emailContent, setEmailContent] = useState<EmailContent | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+export function EmailDetailDialog({ emailId, open, onOpenChange }: EmailDetailDialogProps) {
+  const [email, setEmail] = useState<EmailContent | null>(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (emailId && isOpen) {
+    if (emailId && open) {
       fetchEmailContent(emailId)
-    } else {
-      setEmailContent(null)
     }
-  }, [emailId, isOpen])
+  }, [emailId, open])
 
   const fetchEmailContent = async (id: string) => {
-    setIsLoading(true)
+    setLoading(true)
     try {
       const response = await fetch(`/api/emails/${id}/content`)
-      if (response.ok) {
-        const content = await response.json()
-        setEmailContent(content)
+      const data = await response.json()
+
+      if (data.success) {
+        setEmail(data.email)
       } else {
-        throw new Error("Failed to fetch email content")
+        console.error("Failed to fetch email content:", data.error)
       }
     } catch (error) {
-      showErrorToast(error, "Fetching Email Content")
-      onClose()
+      console.error("Error fetching email content:", error)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
@@ -66,101 +71,76 @@ export function EmailDetailDialog({ emailId, isOpen, onClose }: EmailDetailDialo
       .trim()
   }
 
-  const extractSenderName = (sender: string) => {
-    const match = sender.match(/^(.+?)\s*</)
-    return match ? match[1].replace(/"/g, "") : sender.split("@")[0]
-  }
-
-  const extractSenderEmail = (sender: string) => {
-    const match = sender.match(/<(.+?)>/)
-    return match ? match[1] : sender
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-              <p className="text-gray-600">Loading email content...</p>
-            </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Email Details
+          </DialogTitle>
+          <DialogDescription>View the full email content and AI-generated summary</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
           </div>
-        ) : emailContent ? (
-          <>
-            <DialogHeader className="pb-4">
-              <DialogTitle className="text-xl font-semibold leading-tight pr-8">{emailContent.subject}</DialogTitle>
-              <DialogDescription className="sr-only">Email details and content</DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 flex-1 min-h-0">
+        ) : email ? (
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4">
               {/* Email Header */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src="/placeholder.svg" alt={extractSenderName(emailContent.sender)} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                      {extractSenderName(emailContent.sender)
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()
-                        .substring(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-lg font-semibold">{email.subject}</h3>
+                </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <p className="font-medium text-gray-900">{extractSenderName(emailContent.sender)}</p>
-                      <Badge variant="outline" className="text-xs">
-                        <Mail className="mr-1 h-3 w-3" />
-                        {extractSenderEmail(emailContent.sender)}
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    <span>{email.sender}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    <span>{format(new Date(email.receivedAt), "PPp")}</span>
+                  </div>
+                  {email.category && (
+                    <div className="flex items-center gap-1">
+                      <Tag className="h-4 w-4" />
+                      <Badge
+                        variant="secondary"
+                        style={{ backgroundColor: email.category.color + "20", color: email.category.color }}
+                      >
+                        {email.category.name}
                       </Badge>
                     </div>
-
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="mr-1 h-3 w-3" />
-                      {new Date(emailContent.received_at).toLocaleString()}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
+              <Separator />
+
               {/* AI Summary */}
-              {emailContent.ai_summary && (
-                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-lg p-4">
-                  <div className="flex items-start space-x-2">
-                    <Sparkles className="h-4 w-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-indigo-900 mb-1">AI Summary</h4>
-                      <p className="text-sm text-indigo-800 leading-relaxed">{emailContent.ai_summary}</p>
-                    </div>
-                  </div>
+              {email.summary && (
+                <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">AI Summary</h4>
+                  <p className="text-blue-800 dark:text-blue-200 text-sm">{email.summary}</p>
                 </div>
               )}
 
               <Separator />
 
-              {/* Email Content */}
-              <div className="flex-1 min-h-0">
-                <h4 className="font-medium text-gray-900 mb-3">Email Content</h4>
-                <ScrollArea className="h-[400px] w-full rounded-lg border bg-white p-4">
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-800">
-                      {formatEmailBody(emailContent.body)}
-                    </pre>
-                  </div>
-                </ScrollArea>
+              {/* Email Body */}
+              <div>
+                <h4 className="font-medium mb-3">Email Content</h4>
+                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                  <pre className="whitespace-pre-wrap text-sm font-mono">{formatEmailBody(email.body)}</pre>
+                </div>
               </div>
             </div>
-          </>
+          </ScrollArea>
         ) : (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <Mail className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600">No email selected</p>
-            </div>
-          </div>
+          <div className="text-center py-8 text-muted-foreground">Failed to load email content</div>
         )}
       </DialogContent>
     </Dialog>

@@ -1,209 +1,112 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Mail, Trash2, Unlink, RefreshCw, User, Calendar, Inbox, Star, Send } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Mail, Search, Filter, Clock, User, Sparkles } from "lucide-react"
 import { EmailDetailDialog } from "./email-detail-dialog"
+import { format } from "date-fns"
+import { toast } from "sonner"
 
 interface Email {
   id: string
   subject: string
   sender: string
   snippet: string
-  category_name: string
-  category_color: string
   ai_summary: string
   received_at: string
   is_read: boolean
-  account_email: string
-  account_name?: string
-  account_picture?: string
-  labels?: string[]
+  categories?: {
+    name: string
+    color: string
+  }
+  user_accounts?: {
+    email: string
+  }
 }
 
-interface EmailListProps {
-  selectedCategory: string | null
+interface Category {
+  id: string
+  name: string
+  color: string
 }
 
-export function EmailList({ selectedCategory }: EmailListProps) {
-  const { data: session } = useSession()
+export function EmailList() {
   const [emails, setEmails] = useState<Email[]>([])
-  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
-  const [isLoading, setIsLoading] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [activeTab, setActiveTab] = useState("all")
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
-  const [isEmailDetailOpen, setIsEmailDetailOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchEmails()
-  }, [session, selectedCategory])
+    fetchCategories()
+  }, [])
 
   const fetchEmails = async () => {
-    if (!session?.user?.id) return
-
     try {
-      const url = selectedCategory ? `/api/emails?category=${selectedCategory}` : "/api/emails"
+      const response = await fetch("/api/emails")
+      const data = await response.json()
 
-      const response = await fetch(url)
-      if (response.ok) {
-        const data = await response.json()
+      if (data.success) {
         setEmails(data.emails)
+      } else {
+        toast.error("Failed to fetch emails")
       }
     } catch (error) {
       console.error("Error fetching emails:", error)
+      toast.error("Failed to fetch emails")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleSelectEmail = (emailId: string, checked: boolean) => {
-    const newSelected = new Set(selectedEmails)
-    if (checked) {
-      newSelected.add(emailId)
-    } else {
-      newSelected.delete(emailId)
-    }
-    setSelectedEmails(newSelected)
-  }
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedEmails(new Set(filteredEmails.map((email) => email.id)))
-    } else {
-      setSelectedEmails(new Set())
-    }
-  }
-
-  const handleBulkDelete = async () => {
-    if (selectedEmails.size === 0) return
-
-    setIsProcessing(true)
+  const fetchCategories = async () => {
     try {
-      const response = await fetch("/api/emails/bulk-delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          emailIds: Array.from(selectedEmails),
-        }),
-      })
+      const response = await fetch("/api/categories")
+      const data = await response.json()
 
-      if (response.ok) {
-        setEmails(emails.filter((email) => !selectedEmails.has(email.id)))
-        setSelectedEmails(new Set())
+      if (data.success) {
+        setCategories(data.categories)
       }
     } catch (error) {
-      console.error("Error deleting emails:", error)
-    } finally {
-      setIsProcessing(false)
+      console.error("Error fetching categories:", error)
     }
   }
 
-  const handleBulkUnsubscribe = async () => {
-    if (selectedEmails.size === 0) return
+  const filteredEmails = emails.filter((email) => {
+    const matchesSearch =
+      email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.sender.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.snippet.toLowerCase().includes(searchTerm.toLowerCase())
 
-    setIsProcessing(true)
-    try {
-      const response = await fetch("/api/emails/bulk-unsubscribe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          emailIds: Array.from(selectedEmails),
-        }),
-      })
+    const matchesCategory =
+      selectedCategory === "all" ||
+      (selectedCategory === "uncategorized" && !email.categories) ||
+      email.categories?.name === selectedCategory
 
-      if (response.ok) {
-        fetchEmails()
-        setSelectedEmails(new Set())
-      }
-    } catch (error) {
-      console.error("Error unsubscribing:", error)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    setIsLoading(true)
-    try {
-      await fetch("/api/emails/process", { method: "POST" })
-      await fetchEmails()
-    } catch (error) {
-      console.error("Error refreshing emails:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    return matchesSearch && matchesCategory
+  })
 
   const handleEmailClick = (emailId: string) => {
     setSelectedEmailId(emailId)
-    setIsEmailDetailOpen(true)
+    setDialogOpen(true)
   }
 
-  const handleCloseEmailDetail = () => {
-    setIsEmailDetailOpen(false)
-    setSelectedEmailId(null)
-  }
-
-  // Filter emails based on active tab
-  const filteredEmails = emails.filter((email) => {
-    if (activeTab === "all") return true
-    if (activeTab === "unread") return !email.is_read
-    if (activeTab === "important") return email.labels?.includes("IMPORTANT")
-    if (activeTab === "sent") return email.labels?.includes("SENT")
-    return true
-  })
-
-  // Group emails by account
-  const emailsByAccount = filteredEmails.reduce(
-    (acc, email) => {
-      const key = email.account_email
-      if (!acc[key]) {
-        acc[key] = {
-          account: {
-            email: email.account_email,
-            name: email.account_name,
-            picture: email.account_picture,
-          },
-          emails: [],
-        }
-      }
-      acc[key].emails.push(email)
-      return acc
-    },
-    {} as Record<string, { account: any; emails: Email[] }>,
-  )
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <Card className="h-full shadow-sm border-0 bg-white/50 backdrop-blur-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900">Email Inbox</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle>Your Emails</CardTitle>
+          <CardDescription>Loading your imported emails...</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="animate-pulse space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-gray-100 rounded-xl p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-300 rounded w-3/4" />
-                    <div className="h-3 bg-gray-300 rounded w-1/2" />
-                    <div className="h-3 bg-gray-300 rounded w-full" />
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-center py-8">
+            <Mail className="h-8 w-8 animate-pulse text-muted-foreground" />
           </div>
         </CardContent>
       </Card>
@@ -211,203 +114,118 @@ export function EmailList({ selectedCategory }: EmailListProps) {
   }
 
   return (
-    <Card className="h-full shadow-sm border-0 bg-white/50 backdrop-blur-sm">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-            <Inbox className="mr-2 h-4 w-4 text-blue-600" />
-            Email Inbox
-            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
-              {filteredEmails.length}
-            </Badge>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Your Emails
           </CardTitle>
-          <div className="flex items-center space-x-2">
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              size="sm"
-              disabled={isLoading}
-              className="text-xs bg-transparent"
-            >
-              <RefreshCw className={`mr-2 h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {/* Email Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-4 bg-gray-100/50">
-            <TabsTrigger value="all" className="text-xs">
-              <Mail className="mr-1 h-3 w-3" />
-              All
-            </TabsTrigger>
-            <TabsTrigger value="unread" className="text-xs">
-              <div className="w-2 h-2 bg-blue-600 rounded-full mr-1" />
-              Unread
-            </TabsTrigger>
-            <TabsTrigger value="important" className="text-xs">
-              <Star className="mr-1 h-3 w-3" />
-              Important
-            </TabsTrigger>
-            <TabsTrigger value="sent" className="text-xs">
-              <Send className="mr-1 h-3 w-3" />
-              Sent
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {selectedEmails.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-4 border-t">
-            <span className="text-sm text-gray-600">{selectedEmails.size} selected</span>
-            <Button
-              onClick={handleBulkDelete}
-              variant="destructive"
-              size="sm"
-              disabled={isProcessing}
-              className="text-xs"
-            >
-              <Trash2 className="mr-1 h-3 w-3" />
-              Delete
-            </Button>
-            <Button
-              onClick={handleBulkUnsubscribe}
-              variant="outline"
-              size="sm"
-              disabled={isProcessing}
-              className="text-xs bg-transparent"
-            >
-              <Unlink className="mr-1 h-3 w-3" />
-              Unsubscribe
-            </Button>
-          </div>
-        )}
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {filteredEmails.length > 0 && (
-          <div className="flex items-center space-x-2 pb-2 border-b">
-            <Checkbox checked={selectedEmails.size === filteredEmails.length} onCheckedChange={handleSelectAll} />
-            <span className="text-sm text-gray-600">Select all</span>
-          </div>
-        )}
-
-        {filteredEmails.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-              <Mail className="h-8 w-8 text-gray-400" />
+          <CardDescription>AI-processed and categorized emails from your connected accounts</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search and Filter Controls */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search emails..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No emails found</h3>
-            <p className="text-sm text-gray-600 max-w-sm mx-auto">
-              {selectedCategory
-                ? "No emails in this category yet."
-                : "Connect your Gmail accounts and refresh to see your emails."}
-            </p>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.name}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(emailsByAccount).map(([accountEmail, { account, emails: accountEmails }]) => (
-              <div key={accountEmail} className="space-y-3">
-                {/* Account Header */}
-                <div className="flex items-center space-x-3 pb-2 border-b border-gray-200">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs">
-                      {account.name ? (
-                        account.name
-                          .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")
-                          .toUpperCase()
-                      ) : (
-                        <User className="h-3 w-3" />
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{account.email}</p>
-                    {account.name && <p className="text-xs text-gray-600">{account.name}</p>}
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {accountEmails.length} emails
-                  </Badge>
-                </div>
 
-                {/* Account Emails */}
-                <div className="space-y-2">
-                  {accountEmails.map((email) => (
-                    <div
-                      key={email.id}
-                      onClick={() => handleEmailClick(email.id)}
-                      className={`group bg-white border border-gray-200/50 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-blue-200 cursor-pointer ${
-                        selectedEmails.has(email.id) ? "bg-blue-50 border-blue-200 shadow-sm" : ""
-                      } ${!email.is_read ? "bg-gradient-to-r from-blue-50/30 to-transparent" : ""}`}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <Checkbox
-                          checked={selectedEmails.has(email.id)}
-                          onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="mt-1"
-                        />
-
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div className="flex items-center space-x-2 min-w-0">
-                              <h4
-                                className={`font-medium text-sm truncate ${!email.is_read ? "font-semibold text-gray-900" : "text-gray-800"}`}
-                              >
-                                {email.subject}
-                              </h4>
-                              {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" />}
-                            </div>
-                            <div className="flex items-center space-x-2 flex-shrink-0">
-                              {email.category_name && (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-xs px-2 py-0.5"
-                                  style={{
-                                    backgroundColor: `${email.category_color}20`,
-                                    color: email.category_color,
-                                    borderColor: `${email.category_color}30`,
-                                  }}
-                                >
-                                  {email.category_name}
-                                </Badge>
-                              )}
-                              <div className="flex items-center text-xs text-gray-500">
-                                <Calendar className="mr-1 h-3 w-3" />
-                                {new Date(email.received_at).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center text-sm text-gray-600 space-x-2">
-                            <User className="h-3 w-3 flex-shrink-0" />
-                            <span className="truncate">{email.sender}</span>
-                          </div>
-
-                          {email.ai_summary && (
-                            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-lg p-3">
-                              <p className="text-sm text-indigo-900">
-                                <span className="font-medium">AI Summary:</span> {email.ai_summary}
-                              </p>
-                            </div>
-                          )}
-
-                          <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
-                        </div>
+          {/* Email List */}
+          {filteredEmails.length === 0 ? (
+            <div className="text-center py-8">
+              <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">
+                {emails.length === 0 ? "No emails imported yet" : "No emails match your search"}
+              </h3>
+              <p className="text-muted-foreground">
+                {emails.length === 0
+                  ? "Import emails from your connected accounts to get started"
+                  : "Try adjusting your search terms or category filter"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredEmails.map((email) => (
+                <div
+                  key={email.id}
+                  className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => handleEmailClick(email.id)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className={`font-medium truncate ${!email.is_read ? "font-semibold" : ""}`}>
+                          {email.subject}
+                        </h3>
+                        {!email.is_read && <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0" />}
                       </div>
+
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                        <User className="h-3 w-3" />
+                        <span className="truncate">{email.sender}</span>
+                        <Clock className="h-3 w-3 ml-2" />
+                        <span>{format(new Date(email.received_at), "MMM d, yyyy")}</span>
+                      </div>
+
+                      {email.ai_summary && (
+                        <div className="flex items-start gap-2 mb-2">
+                          <Sparkles className="h-3 w-3 text-purple-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-purple-700 dark:text-purple-300 line-clamp-2">
+                            {email.ai_summary}
+                          </p>
+                        </div>
+                      )}
+
+                      <p className="text-sm text-muted-foreground line-clamp-2">{email.snippet}</p>
                     </div>
-                  ))}
+
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {email.categories && (
+                        <Badge
+                          variant="secondary"
+                          style={{
+                            backgroundColor: email.categories.color + "20",
+                            color: email.categories.color,
+                          }}
+                        >
+                          {email.categories.name}
+                        </Badge>
+                      )}
+                      {email.user_accounts && (
+                        <span className="text-xs text-muted-foreground">{email.user_accounts.email}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {/* Email Detail Dialog */}
-        <EmailDetailDialog emailId={selectedEmailId} isOpen={isEmailDetailOpen} onClose={handleCloseEmailDetail} />
-      </CardContent>
-    </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <EmailDetailDialog emailId={selectedEmailId} open={dialogOpen} onOpenChange={setDialogOpen} />
+    </>
   )
 }
