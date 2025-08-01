@@ -21,6 +21,7 @@ const handler = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
+      console.log("signIn callback - user:", user) // Add this line
       if (account?.provider === "google") {
         try {
           // Store user in Supabase
@@ -38,9 +39,8 @@ const handler = NextAuth({
           }
 
           // Store account information
-          const { error: accountError } = await supabase
-            .from("user_accounts")
-            .upsert({
+          const { error: accountError } = await supabase.from("user_accounts").upsert(
+            {
               user_id: user.id,
               gmail_id: account.providerAccountId,
               access_token: account.access_token,
@@ -48,9 +48,11 @@ const handler = NextAuth({
               email: user.email,
               is_primary: true,
               updated_at: new Date().toISOString(),
-            }, {
-              onConflict: 'user_id,gmail_id',
-            })
+            },
+            {
+              onConflict: "user_id,gmail_id",
+            },
+          )
 
           if (accountError) {
             console.error("Error storing account:", accountError)
@@ -73,11 +75,14 @@ const handler = NextAuth({
       if (user) {
         token.id = user.id
       }
+      console.log("jwt callback - token:", token) // Add this line
       return token
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string
       session.user.id = token.id as string
+      console.log("session callback - token:", token) // Add this line
+      console.log("session callback - session:", session) // Add this line
       return session
     },
   },
