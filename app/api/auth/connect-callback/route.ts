@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     // Handle OAuth errors
     if (error) {
       console.error("OAuth error:", error, errorDescription)
+
+      // Provide specific error messages for common issues
       const errorMap: Record<string, string> = {
         access_denied: "access_denied",
         invalid_request: "invalid_request",
@@ -24,8 +26,71 @@ export async function GET(request: NextRequest) {
         temporarily_unavailable: "temporarily_unavailable",
       }
 
-      return NextResponse.redirect(
-        `${process.env.NEXTAUTH_URL}/dashboard?error=${errorMap[error] || "oauth_error"}&details=${encodeURIComponent(errorDescription || "")}`,
+      return new NextResponse(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Connection Failed</title>
+            <style>
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: #f8fafc;
+              }
+              .error {
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                max-width: 400px;
+              }
+              .error-icon {
+                color: #ef4444;
+                font-size: 3rem;
+                margin-bottom: 1rem;
+              }
+              .retry-btn {
+                background: #3b82f6;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-top: 1rem;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="error">
+              <div class="error-icon">⚠️</div>
+              <h2>Connection Failed</h2>
+              <p>Unable to connect your account. ${errorDescription || "Please try again."}</p>
+              <button class="retry-btn" onclick="window.close()">Close Window</button>
+            </div>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ 
+                  type: 'ACCOUNT_CONNECTION_ERROR', 
+                  error: '${error}',
+                  description: '${errorDescription || ""}'
+                }, '*');
+              }
+              setTimeout(() => window.close(), 5000);
+            </script>
+          </body>
+        </html>
+        `,
+        {
+          headers: {
+            "Content-Type": "text/html",
+          },
+        },
       )
     }
 
@@ -88,38 +153,109 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=invalid_user_info`)
     }
 
-    // Check if this account is already connected to any user
+    // Check if this account is already connected to this user
     const { data: existingAccount } = await supabase
       .from("user_accounts")
-      .select("user_id, email")
+      .select("user_id, email, is_primary")
       .eq("gmail_id", userInfo.id)
       .single()
 
-    if (existingAccount && existingAccount.user_id !== stateData.userId) {
-      console.error(`Account ${userInfo.email} already connected to different user`)
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=account_already_connected`)
+    if (existingAccount) {
+      if (existingAccount.user_id === stateData.userId) {
+        // Account already connected to this user - just update tokens
+        const { error: updateError } = await supabase
+          .from("user_accounts")
+          .update({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token || null,
+            token_expires_at: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("gmail_id", userInfo.id)
+          .eq("user_id", stateData.userId)
+
+        if (updateError) {
+          console.error("Error updating existing account:", updateError)
+        }
+
+        return new NextResponse(
+          `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Account Already Connected</title>
+              <style>
+                body { 
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  height: 100vh;
+                  margin: 0;
+                  background: #f8fafc;
+                }
+                .info {
+                  text-align: center;
+                  padding: 2rem;
+                  background: white;
+                  border-radius: 8px;
+                  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                }
+                .info-icon {
+                  color: #f59e0b;
+                  font-size: 3rem;
+                  margin-bottom: 1rem;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="info">
+                <div class="info-icon">ℹ️</div>
+                <h2>Account Already Connected</h2>
+                <p>This Gmail account is already connected to your dashboard.</p>
+                <p>Tokens have been refreshed.</p>
+              </div>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ 
+                    type: 'ACCOUNT_ALREADY_CONNECTED', 
+                    email: '${userInfo.email}' 
+                  }, '*');
+                }
+                setTimeout(() => window.close(), 3000);
+              </script>
+            </body>
+          </html>
+          `,
+          {
+            headers: {
+              "Content-Type": "text/html",
+            },
+          },
+        )
+      } else {
+        // Account connected to different user
+        console.error(`Account ${userInfo.email} already connected to different user`)
+        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=account_already_connected`)
+      }
     }
 
-    // Store the additional account with enhanced data
-    const { error: dbError } = await supabase.from("user_accounts").upsert(
-      {
-        user_id: stateData.userId,
-        gmail_id: userInfo.id,
-        email: userInfo.email,
-        name: userInfo.name || null,
-        picture: userInfo.picture || null,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || null,
-        token_expires_at: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
-        scope: tokens.scope || null,
-        is_primary: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "user_id,gmail_id",
-      },
-    )
+    // Store the new account
+    const { error: dbError } = await supabase.from("user_accounts").insert({
+      user_id: stateData.userId,
+      gmail_id: userInfo.id,
+      email: userInfo.email,
+      name: userInfo.name || null,
+      picture: userInfo.picture || null,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token || null,
+      token_expires_at: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
+      scope: tokens.scope || null,
+      is_primary: false,
+      sync_status: "active",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
 
     if (dbError) {
       console.error("Error storing additional account:", dbError)
@@ -129,7 +265,7 @@ export async function GET(request: NextRequest) {
     // Log successful connection
     console.log(`Successfully connected account ${userInfo.email} for user ${stateData.userId}`)
 
-    // Close popup and redirect parent
+    // Return success page that closes popup and notifies parent
     return new NextResponse(
       `
       <!DOCTYPE html>
@@ -158,20 +294,36 @@ export async function GET(request: NextRequest) {
               font-size: 3rem;
               margin-bottom: 1rem;
             }
+            .account-info {
+              background: #f0f9ff;
+              padding: 1rem;
+              border-radius: 6px;
+              margin: 1rem 0;
+              border-left: 4px solid #3b82f6;
+            }
           </style>
         </head>
         <body>
           <div class="success">
-            <div class="checkmark">✓</div>
+            <div class="checkmark">✅</div>
             <h2>Account Connected Successfully!</h2>
+            <div class="account-info">
+              <strong>${userInfo.email}</strong><br>
+              <small>Now connected to your dashboard</small>
+            </div>
             <p>You can now close this window.</p>
           </div>
           <script>
             // Notify parent window and close popup
             if (window.opener) {
-              window.opener.postMessage({ type: 'ACCOUNT_CONNECTED', email: '${userInfo.email}' }, '*');
+              window.opener.postMessage({ 
+                type: 'ACCOUNT_CONNECTED', 
+                email: '${userInfo.email}',
+                name: '${userInfo.name || ""}',
+                picture: '${userInfo.picture || ""}'
+              }, '*');
             }
-            setTimeout(() => window.close(), 2000);
+            setTimeout(() => window.close(), 3000);
           </script>
         </body>
       </html>

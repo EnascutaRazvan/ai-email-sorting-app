@@ -12,9 +12,8 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Mail, Shield, RefreshCw, CheckCircle, AlertTriangle, Info } from "lucide-react"
-import { showErrorToast } from "@/lib/error-handler"
-import { OAuthSetupGuide } from "./oauth-setup-guide"
+import { Plus, Mail, Shield, RefreshCw, CheckCircle, AlertTriangle, Info, Users } from "lucide-react"
+import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 
 interface MultiAccountDialogProps {
   onAccountConnected: () => void
@@ -71,9 +70,39 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
         }
       }, 1000)
 
+      // Listen for messages from popup
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === "ACCOUNT_CONNECTED") {
+          clearInterval(checkClosed)
+          popup.close()
+          setConnectionStep("idle")
+          setIsConnecting(false)
+          showSuccessToast("Account Connected", `${event.data.email} has been successfully connected!`)
+          onAccountConnected()
+          setIsOpen(false)
+        } else if (event.data?.type === "ACCOUNT_ALREADY_CONNECTED") {
+          clearInterval(checkClosed)
+          popup.close()
+          setConnectionStep("idle")
+          setIsConnecting(false)
+          showSuccessToast("Account Refreshed", `${event.data.email} tokens have been updated.`)
+          onAccountConnected()
+          setIsOpen(false)
+        } else if (event.data?.type === "ACCOUNT_CONNECTION_ERROR") {
+          clearInterval(checkClosed)
+          popup.close()
+          setConnectionStep("idle")
+          setIsConnecting(false)
+          showErrorToast(event.data.description || "Connection failed", "Account Connection")
+        }
+      }
+
+      window.addEventListener("message", handleMessage)
+
       // Cleanup after 10 minutes
       setTimeout(() => {
         clearInterval(checkClosed)
+        window.removeEventListener("message", handleMessage)
         if (!popup.closed) {
           popup.close()
         }
@@ -93,8 +122,8 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
       case "authorizing":
         return {
           icon: <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />,
-          title: "Opening Authorization",
-          description: "Please complete the authorization in the popup window...",
+          title: "Opening Account Selector",
+          description: "Please select a different Gmail account in the popup window...",
         }
       case "processing":
         return {
@@ -140,6 +169,15 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             <Badge variant="secondary">{existingAccounts}</Badge>
           </div>
 
+          {/* Multi-Account Instructions */}
+          <Alert>
+            <Users className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Multi-Account Setup:</strong> You'll see Google's account chooser. Select a DIFFERENT account than
+              your current one, or click "Use another account" to sign in with a new Gmail account.
+            </AlertDescription>
+          </Alert>
+
           {/* Security Notice */}
           <Alert>
             <Shield className="h-4 w-4" />
@@ -171,16 +209,36 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
             </div>
           </div>
 
+          {/* Step-by-step instructions */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">What to expect:</h4>
+            <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-start space-x-2">
+                <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">1.</span>
+                <span>Google account chooser will open</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">2.</span>
+                <span>Select a different Gmail account</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">3.</span>
+                <span>Grant permissions when prompted</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">4.</span>
+                <span>Account will be added to your dashboard</span>
+              </div>
+            </div>
+          </div>
+
           {/* Development Warning */}
           {process.env.NODE_ENV === "development" && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-xs">
-                <strong>Development Mode:</strong> If you see "Access blocked" error, you need to configure Google Cloud
-                Console properly.
-                <div className="mt-2">
-                  <OAuthSetupGuide />
-                </div>
+                <strong>Development Mode:</strong> If you see "Access blocked" error, make sure you've added your Gmail
+                accounts as test users in Google Cloud Console.
               </AlertDescription>
             </Alert>
           )}
@@ -191,7 +249,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
               {isConnecting ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  {connectionStep === "authorizing" ? "Authorizing..." : "Processing..."}
+                  {connectionStep === "authorizing" ? "Opening Chooser..." : "Processing..."}
                 </>
               ) : (
                 <>

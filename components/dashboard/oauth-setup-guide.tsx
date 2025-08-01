@@ -13,7 +13,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Copy, ExternalLink, Settings, AlertTriangle, CheckCircle, Info } from "lucide-react"
+import { Copy, ExternalLink, Settings, CheckCircle, AlertTriangle } from "lucide-react"
 import { showSuccessToast } from "@/lib/error-handler"
 
 export function OAuthSetupGuide() {
@@ -21,7 +21,7 @@ export function OAuthSetupGuide() {
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
-    showSuccessToast(`${label} copied to clipboard`, "Setup Helper")
+    showSuccessToast(`${label} copied to clipboard`, "Setup Guide")
   }
 
   const currentDomain = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
@@ -29,8 +29,8 @@ export function OAuthSetupGuide() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-xs bg-transparent">
-          <Settings className="mr-1 h-3 w-3" />
+        <Button variant="outline" size="sm">
+          <Settings className="mr-2 h-4 w-4" />
           Setup Guide
         </Button>
       </DialogTrigger>
@@ -38,11 +38,9 @@ export function OAuthSetupGuide() {
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Settings className="mr-2 h-5 w-5" />
-            Google OAuth Setup Guide
+            Google Cloud Console Setup Guide
           </DialogTitle>
-          <DialogDescription>
-            Configure your Google Cloud Console to enable multi-account Gmail integration
-          </DialogDescription>
+          <DialogDescription>Follow these steps to configure Google OAuth for multi-account support</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="console" className="w-full">
@@ -53,164 +51,152 @@ export function OAuthSetupGuide() {
           </TabsList>
 
           <TabsContent value="console" className="space-y-4">
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Step 1:</strong> Go to{" "}
-                <a
-                  href="https://console.cloud.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline inline-flex items-center"
-                >
-                  Google Cloud Console
-                  <ExternalLink className="ml-1 h-3 w-3" />
-                </a>
-              </AlertDescription>
-            </Alert>
+            <div className="space-y-4">
+              <Alert>
+                <ExternalLink className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Step 1:</strong> Go to{" "}
+                  <a
+                    href="https://console.cloud.google.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    Google Cloud Console
+                  </a>
+                </AlertDescription>
+              </Alert>
 
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">1. Enable Gmail API</h4>
-                <p className="text-sm text-gray-600 mb-2">
-                  Go to "APIs & Services" → "Library" → Search for "Gmail API" → Enable it
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    window.open("https://console.cloud.google.com/apis/library/gmail.googleapis.com", "_blank")
-                  }
-                >
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  Open Gmail API
-                </Button>
-              </div>
-
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">2. Configure OAuth Consent Screen</h4>
-                <p className="text-sm text-gray-600 mb-2">Go to "APIs & Services" → "OAuth consent screen"</p>
-                <ul className="text-xs space-y-1 text-gray-600 mb-2">
-                  <li>• Choose "External" user type</li>
-                  <li>• Fill in App name: "Email Sorting App"</li>
-                  <li>• Add your email as developer contact</li>
-                  <li>• Add authorized domains if using custom domain</li>
-                </ul>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open("https://console.cloud.google.com/apis/credentials/consent", "_blank")}
-                >
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  Open Consent Screen
-                </Button>
-              </div>
-
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">3. Add Required Scopes</h4>
-                <p className="text-sm text-gray-600 mb-2">In OAuth consent screen, add these scopes:</p>
-                <div className="space-y-1">
-                  {[
-                    "https://www.googleapis.com/auth/gmail.readonly",
-                    "https://www.googleapis.com/auth/gmail.modify",
-                    "https://www.googleapis.com/auth/userinfo.email",
-                    "https://www.googleapis.com/auth/userinfo.profile",
-                  ].map((scope) => (
-                    <div key={scope} className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs">
-                      <code className="flex-1">{scope}</code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => copyToClipboard(scope, "Scope")}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
+              <div className="space-y-3">
+                <h4 className="font-medium">Enable Required APIs:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <span>Gmail API</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open("https://console.cloud.google.com/apis/library/gmail.googleapis.com", "_blank")
+                      }
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Enable
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <span>Google+ API</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open("https://console.cloud.google.com/apis/library/plus.googleapis.com", "_blank")
+                      }
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Enable
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="oauth" className="space-y-4">
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Step 2:</strong> Create OAuth 2.0 credentials in "APIs & Services" → "Credentials"
-              </AlertDescription>
-            </Alert>
+            <div className="space-y-4">
+              <Alert>
+                <Settings className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Step 2:</strong> Configure OAuth Consent Screen
+                </AlertDescription>
+              </Alert>
 
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">OAuth 2.0 Client Configuration</h4>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-sm font-medium">Application Type:</label>
-                    <Badge variant="secondary" className="ml-2">
-                      Web Application
-                    </Badge>
+              <div className="space-y-3">
+                <h4 className="font-medium">OAuth Consent Screen Settings:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <span>User Type: External</span>
+                    <Badge variant="secondary">Required</Badge>
                   </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Authorized JavaScript Origins:</label>
-                    <div className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs mt-1">
-                      <code>{currentDomain}</code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => copyToClipboard(currentDomain, "Origin URL")}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Authorized Redirect URIs:</label>
-                    <div className="space-y-1 mt-1">
-                      {[`${currentDomain}/api/auth/callback/google`, `${currentDomain}/api/auth/connect-callback`].map(
-                        (uri) => (
-                          <div key={uri} className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs">
-                            <code className="flex-1">{uri}</code>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => copyToClipboard(uri, "Redirect URI")}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ),
-                      )}
+                  <div className="p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <div className="font-medium mb-1">Required Scopes:</div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center justify-between">
+                        <code>https://www.googleapis.com/auth/gmail.readonly</code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard("https://www.googleapis.com/auth/gmail.readonly", "Gmail readonly scope")
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code>https://www.googleapis.com/auth/gmail.modify</code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard("https://www.googleapis.com/auth/gmail.modify", "Gmail modify scope")
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code>https://www.googleapis.com/auth/userinfo.email</code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard("https://www.googleapis.com/auth/userinfo.email", "Email scope")
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code>https://www.googleapis.com/auth/userinfo.profile</code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard("https://www.googleapis.com/auth/userinfo.profile", "Profile scope")
+                          }
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 bg-transparent"
-                  onClick={() => window.open("https://console.cloud.google.com/apis/credentials", "_blank")}
-                >
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  Open Credentials
-                </Button>
-              </div>
-
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">Environment Variables</h4>
-                <p className="text-sm text-gray-600 mb-2">
-                  After creating OAuth credentials, add these to your .env.local:
-                </p>
-                <div className="space-y-1">
-                  <div className="bg-gray-50 p-2 rounded text-xs">
-                    <code>GOOGLE_CLIENT_ID=your_client_id_here</code>
+                <h4 className="font-medium">Authorized Redirect URIs:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <code className="text-xs">{currentDomain}/api/auth/callback/google</code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        copyToClipboard(`${currentDomain}/api/auth/callback/google`, "NextAuth callback URI")
+                      }
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
                   </div>
-                  <div className="bg-gray-50 p-2 rounded text-xs">
-                    <code>GOOGLE_CLIENT_SECRET=your_client_secret_here</code>
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <code className="text-xs">{currentDomain}/api/auth/connect-callback</code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        copyToClipboard(`${currentDomain}/api/auth/connect-callback`, "Multi-account callback URI")
+                      }
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -218,69 +204,78 @@ export function OAuthSetupGuide() {
           </TabsContent>
 
           <TabsContent value="testing" className="space-y-4">
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Step 3:</strong> Add test users to avoid "unverified app" warnings
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">Add Test Users</h4>
-                <p className="text-sm text-gray-600 mb-2">In OAuth consent screen → "Test users" → Add users:</p>
-                <ul className="text-xs space-y-1 text-gray-600">
-                  <li>• Add your Gmail addresses that you want to test with</li>
-                  <li>• Test users can bypass the "unverified app" warning</li>
-                  <li>• You can add up to 100 test users</li>
-                </ul>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 bg-transparent"
-                  onClick={() => window.open("https://console.cloud.google.com/apis/credentials/consent", "_blank")}
-                >
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  Add Test Users
-                </Button>
-              </div>
-
-              <div className="p-3 border rounded-lg">
-                <h4 className="font-medium mb-2">Publishing Status</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <AlertTriangle className="mr-2 h-4 w-4 text-yellow-600" />
-                    <span className="text-sm">
-                      <strong>Testing:</strong> Only test users can access (current status)
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                    <span className="text-sm">
-                      <strong>Published:</strong> Anyone can access (requires Google verification)
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  For production, submit your app for verification to remove user limits.
-                </p>
-              </div>
-
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  <strong>Common Issues:</strong>
-                  <br />• "Access blocked" error → Add your email as test user
-                  <br />• "Redirect URI mismatch" → Check redirect URIs match exactly
-                  <br />• "Invalid client" → Verify Client ID and Secret in .env.local
+            <div className="space-y-4">
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Step 3:</strong> Add Test Users for Development
                 </AlertDescription>
               </Alert>
+
+              <div className="space-y-3">
+                <h4 className="font-medium">Add Test Users:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                    <code>webshookeng@gmail.com</code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard("webshookeng@gmail.com", "Test user email")}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded">
+                    <div className="text-xs text-blue-800 dark:text-blue-200">
+                      💡 <strong>Tip:</strong> Add all Gmail accounts you want to test with as test users. This bypasses
+                      the "unverified app" warning.
+                    </div>
+                  </div>
+                </div>
+
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Important:</strong> For production, you'll need to submit your app for Google verification
+                    to remove the test user limitation.
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-medium">Testing Multi-Account Flow:</h4>
+                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex items-start space-x-2">
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">1.</span>
+                    <span>Sign in with your primary account</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">2.</span>
+                    <span>Click "Connect New Account" - this will force account selection</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">3.</span>
+                    <span>Choose a different Gmail account from the list</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">4.</span>
+                    <span>Grant permissions and verify the account is added</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
 
-        <div className="flex justify-end pt-4">
-          <Button onClick={() => setIsOpen(false)}>Close Guide</Button>
+        <div className="flex justify-end space-x-2 pt-4 border-t">
+          <Button
+            variant="outline"
+            onClick={() => window.open("https://console.cloud.google.com/apis/credentials", "_blank")}
+          >
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Open Console
+          </Button>
+          <Button onClick={() => setIsOpen(false)}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>
