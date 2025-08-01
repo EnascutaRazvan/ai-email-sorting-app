@@ -1,11 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route" // Import authOptions
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions)
 
@@ -35,37 +35,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch accounts" }, { status: 500 })
     }
 
-    // Add token status information
-    const enhancedAccounts = accounts.map((account) => ({
+    // Check for expiring tokens and flag them
+    const accountsWithStatus = accounts.map((account) => ({
       ...account,
       token_status: getTokenStatus(account.token_expires_at),
-      permissions: parseScopes(account.scope),
     }))
 
     return NextResponse.json({
-      accounts: enhancedAccounts,
+      accounts: accountsWithStatus,
       total: accounts.length,
-      primary: accounts.find((acc) => acc.is_primary)?.email,
+      primary: accounts.find((acc) => acc.is_primary),
     })
   } catch (error) {
-    console.error("API error:", error)
+    console.error("Error in accounts API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-function getTokenStatus(expiresAt: string | null): "valid" | "expiring_soon" | "expired" | "never" {
-  if (!expiresAt) return "never"
+function getTokenStatus(expiresAt: string | null): "valid" | "expiring" | "expired" {
+  if (!expiresAt) return "valid"
 
-  const expiry = new Date(expiresAt).getTime()
+  const expiryTime = new Date(expiresAt).getTime()
   const now = Date.now()
   const oneHour = 60 * 60 * 1000
+  const oneDayFromNow = now + 24 * oneHour
 
-  if (expiry < now) return "expired"
-  if (expiry - now < oneHour) return "expiring_soon"
+  if (expiryTime < now) return "expired"
+  if (expiryTime < oneDayFromNow) return "expiring"
   return "valid"
-}
-
-function parseScopes(scope: string | null): string[] {
-  if (!scope) return []
-  return scope.split(" ").filter(Boolean)
 }
