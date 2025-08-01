@@ -15,13 +15,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const emailId = params.id
 
-    // Fetch email content from database
+    // Get the email from database
     const { data: email, error } = await supabase
       .from("emails")
       .select(`
         *,
-        categories (name, color),
-        user_accounts (email)
+        user_accounts!inner(email, name),
+        categories(name, color)
       `)
       .eq("id", emailId)
       .eq("user_id", session.user.id)
@@ -31,16 +31,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Email not found" }, { status: 404 })
     }
 
+    // Mark email as read
+    await supabase
+      .from("emails")
+      .update({ is_read: true, updated_at: new Date().toISOString() })
+      .eq("id", emailId)
+      .eq("user_id", session.user.id)
+
     return NextResponse.json({
       success: true,
       email: {
         id: email.id,
         subject: email.subject,
         sender: email.sender,
-        body: email.email_body,
-        summary: email.ai_summary,
-        receivedAt: email.received_at,
-        isRead: email.is_read,
+        received_at: email.received_at,
+        ai_summary: email.ai_summary,
+        email_body: email.email_body,
+        is_read: true, // Update to read
         category: email.categories,
         account: email.user_accounts,
       },

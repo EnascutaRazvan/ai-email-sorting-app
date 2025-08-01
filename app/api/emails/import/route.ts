@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { accountId } = await request.json()
+    const { accountId, isScheduled = false } = await request.json()
 
     if (!accountId) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
@@ -57,9 +57,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })
     }
 
-    // Fetch emails from Gmail API
+    // Determine the date range for fetching emails
+    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled)
+
+    // Fetch emails from Gmail API with date filtering
+    const gmailQuery = `in:inbox -in:sent ${dateQuery}`
     const gmailResponse = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox -in:sent&maxResults=50`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(gmailQuery)}&maxResults=100`,
       {
         headers: {
           Authorization: `Bearer ${account.access_token}`,
@@ -134,7 +138,7 @@ export async function POST(request: NextRequest) {
           received_at: date.toISOString(),
           is_read: !message.labelIds.includes("UNREAD"),
           gmail_thread_id: message.threadId,
-          email_body: emailBody, // Store full email content
+          email_body: emailBody,
         })
 
         if (insertError) {
@@ -152,6 +156,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Update last sync time for the account
+    await supabase
+      .from("user_accounts")
+      .update({
+        last_sync: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId)
+
     return NextResponse.json({
       success: true,
       imported: importedCount,
@@ -161,6 +174,39 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Import error:", error)
     return NextResponse.json({ error: "Failed to import emails" }, { status: 500 })
+  }
+}
+
+async function buildDateQuery(accountId: string, userId: string, isScheduled: boolean): Promise<string> {
+  try {
+    // Get the account's last sync time and creation time
+    const { data: account } = await supabase
+      .from("user_accounts")
+      .select("last_sync, created_at")
+      .eq("id", accountId)
+      .single()
+
+    if (!account) {
+      return "" // No date filter if account not found
+    }
+
+    let afterDate: Date
+
+    if (isScheduled && account.last_sync) {
+      // For scheduled imports, get emails after last sync
+      afterDate = new Date(account.last_sync)
+    } else {
+      // For manual imports or first-time imports, get emails from account creation
+      afterDate = new Date(account.created_at)
+    }
+
+    // Format date for Gmail API (YYYY/MM/DD)
+    const formattedDate = afterDate.toISOString().split("T")[0].replace(/-/g, "/")
+
+    return `after:${formattedDate}`
+  } catch (error) {
+    console.error("Error building date query:", error)
+    return ""
   }
 }
 
