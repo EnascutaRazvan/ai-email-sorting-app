@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Folder, Trash2 } from "lucide-react"
+import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 
 interface Category {
   id: string
@@ -37,6 +38,7 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
   const [newCategory, setNewCategory] = useState({
     name: "",
     description: "",
@@ -55,17 +57,23 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
       if (response.ok) {
         const data = await response.json()
         setCategories(data.categories)
+      } else {
+        throw new Error("Failed to fetch categories")
       }
     } catch (error) {
-      console.error("Error fetching categories:", error)
+      showErrorToast(error, "Fetching Categories")
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleCreateCategory = async () => {
-    if (!newCategory.name.trim()) return
+    if (!newCategory.name.trim()) {
+      showErrorToast("Category name is required", "Create Category")
+      return
+    }
 
+    setIsCreating(true)
     try {
       const response = await fetch("/api/categories", {
         method: "POST",
@@ -80,13 +88,23 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
         setCategories([...categories, data.category])
         setNewCategory({ name: "", description: "", color: "#3B82F6" })
         setIsDialogOpen(false)
+        showSuccessToast("Category Created", `"${data.category.name}" has been created successfully`)
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create category")
       }
     } catch (error) {
-      console.error("Error creating category:", error)
+      showErrorToast(error, "Creating Category")
+    } finally {
+      setIsCreating(false)
     }
   }
 
-  const handleDeleteCategory = async (categoryId: string) => {
+  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    if (!confirm(`Are you sure you want to delete "${categoryName}"? This action cannot be undone.`)) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: "DELETE",
@@ -97,9 +115,13 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
         if (selectedCategory === categoryId) {
           onCategorySelect(null)
         }
+        showSuccessToast("Category Deleted", `"${categoryName}" has been deleted`)
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete category")
       }
     } catch (error) {
-      console.error("Error deleting category:", error)
+      showErrorToast(error, "Deleting Category")
     }
   }
 
@@ -157,10 +179,10 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
               </Badge>
             </Button>
             <Button
-              onClick={() => handleDeleteCategory(category.id)}
+              onClick={() => handleDeleteCategory(category.id, category.name)}
               variant="ghost"
               size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -219,7 +241,9 @@ export function Categories({ selectedCategory, onCategorySelect }: CategoriesPro
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleCreateCategory}>Create Category</Button>
+              <Button onClick={handleCreateCategory} disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create Category"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
