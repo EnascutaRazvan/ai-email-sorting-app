@@ -18,13 +18,20 @@ export async function GET(request: NextRequest) {
       scope:
         "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify",
       access_type: "offline",
-      prompt: "consent select_account", // Force account selection
-      state: session.user.id, // Pass user ID in state
+      prompt: "consent", // Remove select_account for now
+      state: session.user.id,
+      // Add a parameter to help identify this is for additional account
+      login_hint: "additional_account",
     })
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 
-    return NextResponse.json({ authUrl })
+    return NextResponse.json({
+      authUrl,
+      requiresSignOut: true,
+      message:
+        "To connect a different account, you may need to sign out of Google first, then return and click this link again.",
+    })
   } catch (error) {
     console.error("Error generating connect URL:", error)
     return NextResponse.json({ error: "Failed to generate auth URL" }, { status: 500 })

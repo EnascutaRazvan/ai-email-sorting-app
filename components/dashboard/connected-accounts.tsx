@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Mail, CheckCircle, Trash2, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Mail, CheckCircle, Trash2, AlertCircle, Info } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { MultiAccountGuide } from "./multi-account-guide"
 
 interface ConnectedAccount {
   id: string
@@ -39,12 +41,12 @@ export function ConnectedAccounts() {
 
     if (error) {
       const errorMessages: Record<string, string> = {
-        access_denied: "Access was denied. Please try again.",
-        missing_params: "Missing required parameters.",
-        token_exchange_failed: "Failed to exchange authorization code.",
-        user_info_failed: "Failed to get user information.",
-        storage_failed: "Failed to store account information.",
-        unexpected_error: "An unexpected error occurred.",
+        access_denied: "Access was denied. Please try again and make sure to grant all permissions.",
+        missing_params: "Missing required parameters. Please try again.",
+        token_exchange_failed: "Failed to exchange authorization code. Please try again.",
+        user_info_failed: "Failed to get user information from Google.",
+        storage_failed: "Failed to store account information. Please try again.",
+        unexpected_error: "An unexpected error occurred. Please try again.",
       }
 
       showErrorToast(errorMessages[error] || "Failed to connect account", "Account Connection")
@@ -83,7 +85,27 @@ export function ConnectedAccounts() {
       const response = await fetch("/api/auth/connect-account")
       if (response.ok) {
         const data = await response.json()
-        window.location.href = data.authUrl
+
+        // Open in new tab to avoid losing current session
+        const newWindow = window.open(data.authUrl, "_blank", "width=500,height=600")
+
+        // Check if the window was closed (user completed or cancelled)
+        const checkClosed = setInterval(() => {
+          if (newWindow?.closed) {
+            clearInterval(checkClosed)
+            setIsConnecting(false)
+            // Refresh accounts in case connection was successful
+            setTimeout(() => {
+              fetchConnectedAccounts()
+            }, 1000)
+          }
+        }, 1000)
+
+        // Fallback: stop checking after 5 minutes
+        setTimeout(() => {
+          clearInterval(checkClosed)
+          setIsConnecting(false)
+        }, 300000)
       } else {
         throw new Error("Failed to generate auth URL")
       }
@@ -105,7 +127,8 @@ export function ConnectedAccounts() {
         setAccounts(accounts.filter((account) => account.id !== accountId))
         showSuccessToast("Account Removed", `${email} has been disconnected`)
       } else {
-        throw new Error("Failed to remove account")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to remove account")
       }
     } catch (error) {
       showErrorToast(error, "Removing Account")
@@ -138,6 +161,15 @@ export function ConnectedAccounts() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {process.env.NODE_ENV === "development" && (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Dev Mode:</strong> Multi-account requires Google OAuth verification in production.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {accounts.length === 0 ? (
           <div className="text-center py-4">
             <AlertCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />
@@ -178,16 +210,7 @@ export function ConnectedAccounts() {
           ))
         )}
 
-        <Button
-          onClick={handleConnectNewAccount}
-          variant="outline"
-          className="w-full bg-transparent"
-          size="sm"
-          disabled={isConnecting}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {isConnecting ? "Connecting..." : "Connect New Account"}
-        </Button>
+        <MultiAccountGuide onProceed={handleConnectNewAccount} isLoading={isConnecting} />
       </CardContent>
     </Card>
   )
