@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot } from "lucide-react"
+import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot, Trash2, UserX } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
+import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Trash2, UserX } from "lucide-react"
 
 interface Email {
   id: string
@@ -46,6 +46,24 @@ interface EmailListProps {
   onEmailsChange?: () => void
 }
 
+interface UnsubscribeResult {
+  emailId: string
+  subject: string
+  sender: string
+  success: boolean
+  summary: string
+  details: Array<{
+    link: { url: string; text: string; method: string }
+    result: {
+      success: boolean
+      method: string
+      error?: string
+      details?: string
+      screenshot?: string
+    }
+  }>
+}
+
 export function EmailList({ selectedCategory, accounts, categories, onEmailsChange }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>([])
@@ -66,6 +84,9 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUnsubscribing, setIsUnsubscribing] = useState(false)
+  const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([])
+  const [showUnsubscribeResults, setShowUnsubscribeResults] = useState(false)
+  const [unsubscribeStats, setUnsubscribeStats] = useState({ processed: 0, successful: 0 })
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -253,12 +274,15 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
       if (response.ok) {
         const data = await response.json()
+        setUnsubscribeResults(data.results)
+        setUnsubscribeStats({ processed: data.processed, successful: data.successful })
+        setShowUnsubscribeResults(true)
+        setSelectedEmails(new Set())
+        fetchEmailsWithFilters()
         showSuccessToast(
           "Unsubscribe Complete",
           `Processed ${data.processed} emails, ${data.successful} successful unsubscribes`,
         )
-        setSelectedEmails(new Set())
-        fetchEmailsWithFilters()
       } else {
         throw new Error("Failed to process unsubscribe requests")
       }
@@ -323,7 +347,7 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                     className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 bg-transparent"
                   >
                     {isUnsubscribing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                    Unsubscribe
+                    {isUnsubscribing ? "Processing..." : "Unsubscribe"}
                   </Button>
                 </>
               )}
@@ -517,6 +541,15 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
       {/* Email Detail Dialog */}
       <EmailDetailDialog emailId={selectedEmailId} isOpen={isDetailDialogOpen} onClose={handleCloseDetailDialog} />
+
+      {/* Unsubscribe Results Dialog */}
+      <UnsubscribeResultsDialog
+        isOpen={showUnsubscribeResults}
+        onClose={() => setShowUnsubscribeResults(false)}
+        results={unsubscribeResults}
+        totalProcessed={unsubscribeStats.processed}
+        totalSuccessful={unsubscribeStats.successful}
+      />
     </TooltipProvider>
   )
 }

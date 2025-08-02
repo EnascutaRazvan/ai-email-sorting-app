@@ -47,7 +47,8 @@ export class UnsubscribeAgent {
       })
 
       try {
-        return JSON.parse(text)
+        const parsed = JSON.parse(text)
+        return Array.isArray(parsed) ? parsed : []
       } catch {
         // If JSON parsing fails, try to extract URLs manually
         return this.fallbackLinkExtraction(emailContent)
@@ -169,7 +170,17 @@ export class UnsubscribeAgent {
           `,
         })
 
-        const analysis = JSON.parse(analysisText)
+        let analysis
+        try {
+          analysis = JSON.parse(analysisText)
+        } catch {
+          analysis = {
+            action: "ERROR",
+            elements: [],
+            confidence: 0,
+            message: "Failed to parse AI analysis",
+          }
+        }
 
         // Execute the determined actions
         let success = false
@@ -203,8 +214,8 @@ export class UnsubscribeAgent {
                   }, element.selector)
                 }
 
-                if (elementHandle) {
-                  await elementHandle.click()
+                if (elementHandle && elementHandle.asElement()) {
+                  await elementHandle.asElement()!.click()
                   await page.waitForTimeout(2000) // Wait for any redirects
                   success = true
                   details = `Successfully clicked: ${element.selector}`
