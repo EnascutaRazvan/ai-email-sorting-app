@@ -31,6 +31,7 @@ interface ConnectedAccount {
 interface UserColumn {
   image?: string
 }
+
 export function ConnectedAccounts() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
@@ -198,18 +199,18 @@ export function ConnectedAccounts() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+      <Card className="glass">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900">Connected Accounts</CardTitle>
+          <CardTitle className="text-base font-semibold text-foreground">Connected Accounts</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="animate-pulse space-y-3">
             {[1, 2].map((i) => (
-              <div key={i} className="flex items-center space-x-3 p-3 bg-gray-100 rounded-xl">
-                <div className="w-10 h-10 bg-gray-300 rounded-full" />
+              <div key={i} className="flex items-center space-x-3 p-3 bg-muted rounded-xl">
+                <div className="w-10 h-10 bg-muted-foreground/20 rounded-full" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-gray-300 rounded w-3/4" />
-                  <div className="h-2 bg-gray-300 rounded w-1/2" />
+                  <div className="h-3 bg-muted-foreground/20 rounded w-3/4" />
+                  <div className="h-2 bg-muted-foreground/20 rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -221,20 +222,20 @@ export function ConnectedAccounts() {
 
   return (
     <TooltipProvider>
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+      <Card className="glass">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-              <Mail className="mr-2 h-4 w-4 text-blue-600" />
+            <CardTitle className="text-base font-semibold text-foreground flex items-center">
+              <Mail className="mr-2 h-4 w-4 text-primary" />
               Gmail Accounts
-              <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+              <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground text-xs">
                 {accounts.length}
               </Badge>
             </CardTitle>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <Info className="h-4 w-4 text-gray-400" />
+                  <Info className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-xs">
@@ -250,7 +251,7 @@ export function ConnectedAccounts() {
           {/* Collapsible Info Section */}
           <Collapsible open={isInfoExpanded} onOpenChange={setIsInfoExpanded}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-muted-foreground h-8">
                 <div className="flex items-center">
                   <Shield className="h-3 w-3 mr-1" />
                   Security & Auto-sync Info
@@ -259,9 +260,9 @@ export function ConnectedAccounts() {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-2 pt-2">
-              <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground space-y-1 bg-muted/50 rounded-lg p-3">
                 <div className="flex items-center">
-                  <Zap className="h-3 w-3 text-blue-600 mr-1" />
+                  <Zap className="h-3 w-3 text-primary mr-1" />
                   <span className="font-medium">Auto-sync:</span> New emails imported every 15 minutes
                 </div>
                 <div className="flex items-center">
@@ -278,11 +279,11 @@ export function ConnectedAccounts() {
 
           {accounts.length === 0 ? (
             <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
-                <Mail className="h-8 w-8 text-blue-600" />
+              <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+                <Mail className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
-              <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Connect Your Gmail</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
                 Start by connecting your Gmail accounts to manage all your emails in one place with automatic AI
                 processing
               </p>
@@ -296,16 +297,16 @@ export function ConnectedAccounts() {
                 return (
                   <div
                     key={account.id}
-                    className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
+                    className="group relative bg-card border border-border rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-border/80"
                   >
                     <div className="flex items-center space-x-3">
                       <div className="relative">
-                        <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
+                        <Avatar className="h-10 w-10 ring-2 ring-background shadow-sm">
                           <AvatarImage
                             src={account.picture || account.users?.image || "/placeholder.svg"}
                             alt={account.name || account.email}
                           />
-                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                          <AvatarFallback className="bg-primary text-primary-foreground text-sm font-medium">
                             {account.name ? (
                               account.name
                                 .split(" ")
@@ -317,29 +318,27 @@ export function ConnectedAccounts() {
                             )}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-background rounded-full flex items-center justify-center">
                           <CheckCircle className="h-2.5 w-2.5 text-white" />
                         </div>
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2 mb-1">
-                          <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
+                          <p className="font-medium text-sm text-foreground truncate">{account.email}</p>
                           {account.is_primary && (
-                            <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
-                              Primary
-                            </Badge>
+                            <Badge className="bg-primary text-primary-foreground text-xs px-2 py-0.5">Primary</Badge>
                           )}
                         </div>
 
-                        {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
+                        {account.name && <p className="text-xs text-muted-foreground truncate mb-1">{account.name}</p>}
 
                         <div className="flex items-center space-x-2">
-                          <div className="flex items-center text-xs text-gray-500">
+                          <div className="flex items-center text-xs text-muted-foreground">
                             <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
                             Connected {new Date(account.created_at).toLocaleDateString()}
                           </div>
-                          <span className="text-gray-400">•</span>
+                          <span className="text-muted-foreground">•</span>
                           <Tooltip>
                             <TooltipTrigger>
                               <div className={`flex items-center text-xs ${syncInfo.color}`}>
@@ -364,7 +363,7 @@ export function ConnectedAccounts() {
                                 onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

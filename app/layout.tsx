@@ -4,14 +4,13 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/components/providers"
 import { Toaster } from "@/components/ui/toaster"
-import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "AI Email Sorting App",
-  description: "AI-powered email categorization and management",
-  generator: "v0.dev",
+  description: "Organize your emails with AI-powered categorization and smart filtering",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -20,12 +19,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>
           {children}
           <Toaster />
-          <Analytics />
         </Providers>
       </body>
     </html>

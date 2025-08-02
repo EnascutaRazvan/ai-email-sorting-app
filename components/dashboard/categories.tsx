@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Folder, Trash2, FolderOpen } from "lucide-react"
+import { Plus, Folder, Trash2 } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 
 interface Category {
@@ -139,14 +139,14 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
 
   if (isLoading) {
     return (
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+      <Card className="glass">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-900">Categories</CardTitle>
+          <CardTitle className="text-base font-semibold text-foreground">Categories</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+              <div key={i} className="h-10 bg-muted rounded" />
             ))}
           </div>
         </CardContent>
@@ -155,41 +155,28 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
   }
 
   return (
-    <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+    <Card className="glass">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-          <Folder className="mr-2 h-4 w-4 text-blue-600" />
+        <CardTitle className="text-base font-semibold text-foreground flex items-center">
+          <Folder className="mr-2 h-4 w-4 text-primary" />
           Categories
-          <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+          <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground text-xs">
             {categories.length}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {/* <Button
-          onClick={() => onCategorySelect(null)}
-          variant={selectedCategory === null ? "default" : "ghost"}
-          className="w-full justify-start"
-          size="sm"
-        >
-          <FolderOpen className="mr-2 h-4 w-4" />
-          All Emails
-          <Badge variant="secondary" className="ml-auto">
-            {getTotalEmailCount()}
-          </Badge>
-        </Button> */}
-
         {categories.map((category) => (
           <div key={category.id} className="group relative">
             <Button
               onClick={() => onCategorySelect(category.id)}
-              variant={selectedCategory === category.id ? "default" : "ghost"}
-              className="w-full justify-start pr-8"
+              variant={selectedCategory === category.id ? "secondary" : "ghost"}
+              className="w-full justify-start pr-8 hover:bg-muted"
               size="sm"
             >
               <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
               {category.name}
-              <Badge variant="secondary" className="ml-auto">
+              <Badge variant="secondary" className="ml-auto bg-muted text-muted-foreground">
                 {category.email_count}
               </Badge>
             </Button>
@@ -197,7 +184,7 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
               onClick={() => handleDeleteCategory(category.id, category.name)}
               variant="ghost"
               size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-3 w-3" />
             </Button>
@@ -206,46 +193,46 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-transparent" size="sm">
+            <Button variant="outline" className="w-full bg-background hover:bg-muted" size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Category
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-white">
+          <DialogContent className="sm:max-w-[425px] bg-card">
             <DialogHeader>
-              <DialogTitle className="text-gray-900">Create New Category</DialogTitle>
-              <DialogDescription className="text-gray-600">
+              <DialogTitle className="text-foreground">Create New Category</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
                 Add a new category to organize your emails.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right text-gray-700">
+                <Label htmlFor="name" className="text-right text-foreground">
                   Name
                 </Label>
                 <Input
                   id="name"
                   value={newCategory.name}
                   onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                  className="col-span-3"
+                  className="col-span-3 bg-background border-border"
                   placeholder="e.g., Work, Personal, Shopping"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right text-gray-700">
+                <Label htmlFor="description" className="text-right text-foreground">
                   Description
                 </Label>
                 <Textarea
                   id="description"
                   value={newCategory.description}
                   onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
-                  className="col-span-3"
+                  className="col-span-3 bg-background border-border"
                   placeholder="Describe what emails belong in this category"
                   rows={3}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="color" className="text-right text-gray-700">
+                <Label htmlFor="color" className="text-right text-foreground">
                   Color
                 </Label>
                 <Input
@@ -253,7 +240,7 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
                   type="color"
                   value={newCategory.color}
                   onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
-                  className="col-span-3 h-10"
+                  className="col-span-3 h-10 bg-background border-border"
                 />
               </div>
             </div>
