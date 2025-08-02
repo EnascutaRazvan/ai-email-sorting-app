@@ -12,6 +12,7 @@ import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot } from "
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
+import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Trash2, UserX } from "lucide-react"
 
@@ -66,6 +67,8 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUnsubscribing, setIsUnsubscribing] = useState(false)
+  const [unsubscribeResults, setUnsubscribeResults] = useState<any>(null)
+  const [showUnsubscribeResults, setShowUnsubscribeResults] = useState(false)
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -226,7 +229,8 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
       })
 
       if (response.ok) {
-        showSuccessToast("Emails Deleted", `Successfully deleted ${selectedEmails.size} emails`)
+        const data = await response.json()
+        showSuccessToast("Emails Deleted", `Successfully deleted ${data.deleted} emails`)
         setSelectedEmails(new Set())
         fetchEmailsWithFilters()
         onEmailsChange?.()
@@ -253,6 +257,8 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
       if (response.ok) {
         const data = await response.json()
+        setUnsubscribeResults(data)
+        setShowUnsubscribeResults(true)
         showSuccessToast(
           "Unsubscribe Complete",
           `Processed ${data.processed} emails, ${data.successful} successful unsubscribes`,
@@ -323,7 +329,7 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                     className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 bg-transparent"
                   >
                     {isUnsubscribing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                    Unsubscribe
+                    {isUnsubscribing ? "Processing..." : "Unsubscribe"}
                   </Button>
                 </>
               )}
@@ -517,6 +523,17 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
       {/* Email Detail Dialog */}
       <EmailDetailDialog emailId={selectedEmailId} isOpen={isDetailDialogOpen} onClose={handleCloseDetailDialog} />
+
+      {/* Unsubscribe Results Dialog */}
+      {unsubscribeResults && (
+        <UnsubscribeResultsDialog
+          isOpen={showUnsubscribeResults}
+          onClose={() => setShowUnsubscribeResults(false)}
+          results={unsubscribeResults.results || []}
+          totalProcessed={unsubscribeResults.processed || 0}
+          totalSuccessful={unsubscribeResults.successful || 0}
+        />
+      )}
     </TooltipProvider>
   )
 }

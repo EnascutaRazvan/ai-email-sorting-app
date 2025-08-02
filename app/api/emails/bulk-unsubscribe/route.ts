@@ -6,6 +6,15 @@ import { UnsubscribeAgent } from "@/lib/unsubscribe-agent"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+interface GmailMessage {
+  id: string
+  payload: {
+    headers: Array<{ name: string; value: string }>
+    body?: { data?: string }
+    parts?: Array<{ body?: { data?: string }; mimeType?: string }>
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -20,10 +29,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
     }
 
-    // Fetch email content for the selected emails
+    // Fetch email records with account info
     const { data: emails, error: fetchError } = await supabase
       .from("emails")
-      .select("id, email_body, snippet, sender, subject")
+      .select(`
+        id, 
+        subject, 
+        sender, 
+        snippet,
+        ai_summary,
+        gmail_message_id,
+        user_accounts!inner(access_token)
+      `)
       .in("id", emailIds)
       .eq("user_id", session.user.id)
 
@@ -39,8 +56,21 @@ export async function POST(request: NextRequest) {
     // Process each email for unsubscribe
     for (const email of emails) {
       try {
-        const emailContent = email.email_body || email.snippet || ""
-        const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
+        // Fetch fresh email content from Gmail API
+        let freshContent = ""
+
+        if (email.gmail_message_id && email.user_accounts?.access_token) {
+          try {
+            freshContent = await fetchFreshEmailContent(email.gmail_message_id, email.user_accounts.access_token)
+          } catch (gmailError) {
+            console.warn(`Failed to fetch fresh content for email ${email.id}, using cached content:`, gmailError)
+            freshContent = email.snippet || ""
+          }
+        } else {
+          freshContent = email.snippet || ""
+        }
+
+        const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(freshContent)
 
         results.push({
           emailId: email.id,
@@ -54,11 +84,13 @@ export async function POST(request: NextRequest) {
         if (unsubscribeResult.success) {
           successfulUnsubscribes++
 
-          // Mark email as processed/unsubscribed in database
+          // Update email record with unsubscribe status
+          const updatedSummary = `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim()
+
           await supabase
             .from("emails")
             .update({
-              ai_summary: `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim(),
+              ai_summary: updatedSummary,
             })
             .eq("id", email.id)
         }
@@ -88,4 +120,43 @@ export async function POST(request: NextRequest) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+async function fetchFreshEmailContent(messageId: string, accessToken: string): Promise<string> {
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch email: ${response.statusText}`)
+    }
+
+    const message: GmailMessage = await response.json()
+    return extractEmailBody(message.payload)
+  } catch (error) {
+    console.error("Error fetching fresh email content:", error)
+    throw error
+  }
+}
+
+function extractEmailBody(payload: any): string {
+  let body = ""
+
+  if (payload.body?.data) {
+    body = Buffer.from(payload.body.data, "base64").toString("utf-8")
+  } else if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/html" && part.body?.data) {
+        body = Buffer.from(part.body.data, "base64").toString("utf-8")
+        break
+      } else if (part.mimeType === "text/plain" && part.body?.data && !body) {
+        body = Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
+  }
+
+  return body || "No content available"
 }

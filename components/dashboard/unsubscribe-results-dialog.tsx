@@ -3,7 +3,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { CheckCircle, XCircle, Mail, ExternalLink } from "lucide-react"
+import { CheckCircle, XCircle, Mail, ExternalLink, Globe, Zap } from "lucide-react"
 
 interface UnsubscribeResult {
   emailId: string
@@ -12,8 +12,20 @@ interface UnsubscribeResult {
   success: boolean
   summary: string
   details: Array<{
-    link: { url: string; text: string; method: string }
-    result: { success: boolean; method: string; error?: string; details?: string }
+    link: {
+      url: string
+      text: string
+      method: string
+      confidence: number
+      language: string
+    }
+    result: {
+      success: boolean
+      method: string
+      error?: string
+      details?: string
+      language?: string
+    }
   }>
 }
 
@@ -45,6 +57,21 @@ export function UnsubscribeResultsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{totalProcessed}</div>
+            <div className="text-sm text-blue-800">Total Processed</div>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{totalSuccessful}</div>
+            <div className="text-sm text-green-800">Successful</div>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <div className="text-2xl font-bold text-red-600">{totalProcessed - totalSuccessful}</div>
+            <div className="text-sm text-red-800">Failed</div>
+          </div>
+        </div>
+
         <ScrollArea className="flex-1 max-h-[60vh]">
           <div className="space-y-4">
             {results.map((result) => (
@@ -70,26 +97,58 @@ export function UnsubscribeResultsDialog({
                 {result.details.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-xs font-medium text-gray-800 uppercase tracking-wide">
-                      Unsubscribe Links Processed:
+                      Unsubscribe Links Found ({result.details.length}):
                     </h4>
                     {result.details.map((detail, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-white/50 rounded border">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <ExternalLink className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-600 truncate">{detail.link.url}</span>
+                      <div key={index} className="p-3 bg-white/70 rounded border">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <ExternalLink className="h-3 w-3 text-gray-400" />
+                              <span className="text-xs font-mono text-gray-600 truncate">{detail.link.url}</span>
+                            </div>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="outline" className="text-xs">
+                                <Zap className="h-3 w-3 mr-1" />
+                                {detail.link.method}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                <Globe className="h-3 w-3 mr-1" />
+                                {detail.link.language}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {Math.round(detail.link.confidence * 100)}% confidence
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-gray-600 mb-1">
+                              <strong>Link Text:</strong> "{detail.link.text}"
+                            </div>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">Method: {detail.result.method}</p>
+                          <Badge variant={detail.result.success ? "default" : "secondary"} className="text-xs ml-2">
+                            {detail.result.success ? "✓" : "✗"}
+                          </Badge>
+                        </div>
+
+                        <div className="border-t pt-2">
+                          <div className="text-xs">
+                            <strong>Method:</strong> {detail.result.method}
+                            {detail.result.language && (
+                              <span className="ml-2">
+                                <strong>Language:</strong> {detail.result.language}
+                              </span>
+                            )}
+                          </div>
                           {detail.result.details && (
-                            <p className="text-xs text-gray-600 mt-1">{detail.result.details}</p>
+                            <div className="text-xs text-green-700 mt-1">
+                              <strong>Result:</strong> {detail.result.details}
+                            </div>
                           )}
                           {detail.result.error && (
-                            <p className="text-xs text-red-600 mt-1">Error: {detail.result.error}</p>
+                            <div className="text-xs text-red-600 mt-1">
+                              <strong>Error:</strong> {detail.result.error}
+                            </div>
                           )}
                         </div>
-                        <Badge variant={detail.result.success ? "default" : "secondary"} className="text-xs">
-                          {detail.result.success ? "✓" : "✗"}
-                        </Badge>
                       </div>
                     ))}
                   </div>
