@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
-import { Mail, LogOut, Plus, Inbox, Star, Menu, X, Search, Trash2, Archive, Clock } from "lucide-react"
+import { Mail, LogOut, Plus, Menu, X, Search, Trash2, Clock, Bot, RefreshCw } from "lucide-react"
 import { EmailList } from "./email-list"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { MultiAccountDialog } from "./multi-account-dialog"
@@ -44,6 +44,7 @@ export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [isRecategorizing, setIsRecategorizing] = useState(false)
 
   // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
@@ -181,6 +182,33 @@ export function DashboardLayout() {
     }
   }
 
+  const handleRecategorizeEmails = async () => {
+    setIsRecategorizing(true)
+
+    try {
+      // Ensure uncategorized category exists
+      await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
+
+      const response = await fetch("/api/emails/recategorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        showSuccessToast("AI Recategorization Complete", `Updated ${data.updated} emails with AI suggestions`)
+        setRefreshTrigger((prev) => prev + 1)
+      } else {
+        throw new Error("Failed to recategorize emails")
+      }
+    } catch (error) {
+      showErrorToast(error, "AI Recategorization")
+    } finally {
+      setIsRecategorizing(false)
+    }
+  }
+
   const getTotalEmailCount = () => {
     return categories.reduce((sum, cat) => sum + cat.email_count, 0)
   }
@@ -248,9 +276,32 @@ export function DashboardLayout() {
       {/* Navigation */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
-          {/* Quick Filters */}
+          {/* Categories */}
           <div className="space-y-2">
-            <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Quick Filters</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-sidebar-foreground">Categories</h3>
+              <div className="flex items-center space-x-1">
+                <Button
+                  onClick={handleRecategorizeEmails}
+                  disabled={isRecategorizing}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                  title="AI Recategorize"
+                >
+                  {isRecategorizing ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
+                </Button>
+                <CreateCategoryDialog onCategoryCreated={() => setRefreshTrigger((prev) => prev + 1)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </CreateCategoryDialog>
+              </div>
+            </div>
             <div className="space-y-1">
               <Button
                 variant={selectedCategory === "all" ? "secondary" : "ghost"}
@@ -264,78 +315,13 @@ export function DashboardLayout() {
                 onClick={() => handleCategorySelect("all")}
               >
                 <div className="flex items-center">
-                  <Inbox className="mr-2 h-4 w-4" />
+                  <div className="mr-2 h-3 w-3 rounded-full bg-gray-400" />
                   All Emails
                 </div>
                 <Badge variant="secondary" className="bg-sidebar-accent text-sidebar-accent-foreground text-xs">
                   {getTotalEmailCount()}
                 </Badge>
               </Button>
-
-              <Button
-                variant={selectedCategory === "unread" ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "w-full justify-start text-left",
-                  selectedCategory === "unread"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-                )}
-                onClick={() => handleCategorySelect("unread")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Unread
-              </Button>
-
-              <Button
-                variant={selectedCategory === "starred" ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "w-full justify-start text-left",
-                  selectedCategory === "starred"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-                )}
-                onClick={() => handleCategorySelect("starred")}
-              >
-                <Star className="mr-2 h-4 w-4" />
-                Starred
-              </Button>
-
-              <Button
-                variant={selectedCategory === "archived" ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(
-                  "w-full justify-start text-left",
-                  selectedCategory === "archived"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-                )}
-                onClick={() => handleCategorySelect("archived")}
-              >
-                <Archive className="mr-2 h-4 w-4" />
-                Archived
-              </Button>
-            </div>
-          </div>
-
-          <Separator className="bg-sidebar-border" />
-
-          {/* Categories */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-sidebar-foreground">Categories</h3>
-              <CreateCategoryDialog onCategoryCreated={() => setRefreshTrigger((prev) => prev + 1)}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </CreateCategoryDialog>
-            </div>
-            <div className="space-y-1">
               {categories.map((category) => (
                 <div key={category.id} className="group relative">
                   <Button

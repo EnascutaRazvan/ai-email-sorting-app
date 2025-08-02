@@ -25,6 +25,9 @@ import {
   UnlinkIcon as Unsubscribe,
   Eye,
   EyeOff,
+  Sparkles,
+  Clock,
+  User,
 } from "lucide-react"
 import { EmailFilters } from "./email-filters"
 import { EmailDetailDialog } from "./email-detail-dialog"
@@ -53,6 +56,7 @@ interface Email {
   }
   summary?: string
   content_preview?: string
+  snippet?: string
 }
 
 interface Category {
@@ -521,136 +525,169 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                   <div
                     key={email.id}
                     className={cn(
-                      "flex items-center space-x-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer",
+                      "group relative p-4 hover:bg-muted/50 transition-colors cursor-pointer",
                       !email.is_read && "bg-muted/30",
                       selectedEmails.has(email.id) && "bg-primary/10",
                     )}
                     onClick={() => handleEmailClick(email)}
                   >
-                    <Checkbox
-                      checked={selectedEmails.has(email.id)}
-                      onCheckedChange={(checked) => handleEmailSelect(email.id, checked as boolean)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
+                    <div className="flex items-start space-x-4">
+                      <Checkbox
+                        checked={selectedEmails.has(email.id)}
+                        onCheckedChange={(checked) => handleEmailSelect(email.id, checked as boolean)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1"
+                      />
 
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src="/placeholder.svg" alt={email.sender_name || email.sender} />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {getInitials(email.sender_name, email.sender)}
-                      </AvatarFallback>
-                    </Avatar>
+                      <Avatar className="h-10 w-10 flex-shrink-0">
+                        <AvatarImage src="/placeholder.svg" alt={email.sender_name || email.sender} />
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          {getInitials(email.sender_name, email.sender)}
+                        </AvatarFallback>
+                      </Avatar>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center space-x-2 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <p
+                              className={cn(
+                                "text-sm truncate",
+                                email.is_read ? "text-muted-foreground" : "text-foreground font-medium",
+                              )}
+                            >
+                              {email.sender_name || email.sender}
+                            </p>
+                            {email.account && (
+                              <Badge variant="outline" className="text-xs">
+                                {email.account.email}
+                              </Badge>
+                            )}
+                            {email.category && (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs"
+                                style={{
+                                  backgroundColor: `${email.category.color}20`,
+                                  color: email.category.color,
+                                  borderColor: `${email.category.color}40`,
+                                }}
+                              >
+                                {email.category.name}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-muted-foreground">{formatDate(email.received_at)}</span>
+                            {email.is_starred && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
+                            {!email.is_read && <div className="w-2 h-2 bg-primary rounded-full" />}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
                           <p
                             className={cn(
                               "text-sm truncate",
                               email.is_read ? "text-muted-foreground" : "text-foreground font-medium",
                             )}
                           >
-                            {email.sender_name || email.sender}
-                          </p>
-                          {email.account && (
-                            <Badge variant="outline" className="text-xs">
-                              {email.account.email}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-muted-foreground">{formatDate(email.received_at)}</span>
-                          {email.is_starred && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className={cn(
-                              "text-sm truncate mb-1",
-                              email.is_read ? "text-muted-foreground" : "text-foreground font-medium",
-                            )}
-                          >
                             {email.subject}
                           </p>
-                          {email.summary && <p className="text-xs text-muted-foreground truncate">{email.summary}</p>}
-                        </div>
 
-                        <div className="flex items-center space-x-2 ml-4">
-                          {email.category && (
-                            <Badge
-                              variant="secondary"
-                              className="text-xs"
-                              style={{
-                                backgroundColor: `${email.category.color}20`,
-                                color: email.category.color,
-                                borderColor: `${email.category.color}40`,
-                              }}
-                            >
-                              {email.category.name}
-                            </Badge>
+                          {/* AI Summary */}
+                          {email.summary && (
+                            <div className="bg-primary/5 rounded-md p-2 border border-primary/10">
+                              <div className="flex items-center mb-1">
+                                <Sparkles className="h-3 w-3 text-primary mr-1" />
+                                <span className="text-xs font-medium text-primary">AI Summary</span>
+                              </div>
+                              <p className="text-xs text-foreground line-clamp-2 leading-relaxed">{email.summary}</p>
+                            </div>
                           )}
 
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleMarkAsRead([email.id], !email.is_read)
-                                }}
-                              >
-                                {email.is_read ? (
-                                  <>
-                                    <EyeOff className="mr-2 h-4 w-4" />
-                                    Mark as unread
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    Mark as read
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleMarkAsStarred([email.id], !email.is_starred)
-                                }}
-                              >
-                                <Star className="mr-2 h-4 w-4" />
-                                {email.is_starred ? "Remove star" : "Add star"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleArchive([email.id])
-                                }}
-                              >
-                                <Archive className="mr-2 h-4 w-4" />
-                                Archive
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleDelete([email.id])
-                                }}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {/* Content Preview */}
+                          {(email.content_preview || email.snippet) && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                              {email.content_preview || email.snippet}
+                            </p>
+                          )}
+
+                          {/* Email metadata */}
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <div className="flex items-center space-x-2">
+                              <User className="h-3 w-3" />
+                              <span className="truncate">{email.account?.email || "Unknown account"}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>
+                                {new Date(email.received_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMarkAsRead([email.id], !email.is_read)
+                            }}
+                          >
+                            {email.is_read ? (
+                              <>
+                                <EyeOff className="mr-2 h-4 w-4" />
+                                Mark as unread
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Mark as read
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMarkAsStarred([email.id], !email.is_starred)
+                            }}
+                          >
+                            <Star className="mr-2 h-4 w-4" />
+                            {email.is_starred ? "Remove star" : "Add star"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleArchive([email.id])
+                            }}
+                          >
+                            <Archive className="mr-2 h-4 w-4" />
+                            Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete([email.id])
+                            }}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 ))}
