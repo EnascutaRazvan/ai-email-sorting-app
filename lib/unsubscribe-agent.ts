@@ -1,6 +1,7 @@
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
-import puppeteer from "puppeteer"
+import playwright from "playwright-aws-lambda"
+import type { Browser } from "playwright-core"
 
 interface UnsubscribeLink {
   url: string
@@ -87,7 +88,7 @@ export class UnsubscribeAgent {
   }
 
   async processUnsubscribe(link: UnsubscribeLink): Promise<UnsubscribeResult> {
-    let browser: puppeteer.Browser | null = null
+    let browser: Browser | null = null
     try {
       // Handle mailto links
       if (link.url.startsWith("mailto:")) {
@@ -99,60 +100,21 @@ export class UnsubscribeAgent {
       }
 
       // Launch browser for actual web navigation
-      browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--single-process",
-          "--disable-gpu",
-        ],
-      })
-
-      let page: puppeteer.Page | null = null
-      let navigationPromise: Promise<puppeteer.HTTPResponse | null> | null = null
-
-      // Listen for new pages being created (e.g., pop-ups, redirects to new tabs)
-      browser.on("targetcreated", async (target) => {
-        if (target.type() === "page" && !page) {
-          page = await target.page()
-        }
-      })
-
-      // Try to navigate to the URL
-      try {
-        page = await browser.newPage()
-        await page.setUserAgent(
+      browser = await playwright.launchChromium({ headless: true })
+      const context = await browser.newContext({
+        userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        )
-        navigationPromise = page.goto(link.url, { waitUntil: "networkidle2", timeout: 30000 })
-        await navigationPromise
-      } catch (navError) {
-        // If navigation fails or frame detaches, try to find an existing page
-        console.warn(`Initial navigation to ${link.url} failed or detached. Trying to find existing page.`, navError)
-        if (!page) {
-          const pages = await browser.pages()
-          page = pages[0] // Fallback to the first available page
-        }
-        if (!page) {
-          throw new Error("No active page found after navigation attempt.")
-        }
-      }
+        ignoreHTTPSErrors: true,
+      })
+      const page = await context.newPage()
 
-      // Ensure page is not null before proceeding
-      if (!page) {
-        throw new Error("Page object is null after navigation attempts.")
-      }
+      await page.goto(link.url, { waitUntil: "networkidle", timeout: 30000 })
 
       // Take a screenshot for debugging
-      const screenshot = await page.screenshot({ encoding: "base64" })
+      const screenshotBuffer = await page.screenshot()
+      const screenshot = screenshotBuffer.toString("base64")
 
       // Get page content for AI analysis
-      const pageContent = await page.content()
       const pageText = await page.evaluate(() => document.body.innerText)
 
       // Use AI to analyze the page and determine next steps
@@ -215,32 +177,16 @@ export class UnsubscribeAgent {
         success = true
         details = "Already unsubscribed or email not found in list"
       } else if (analysis.action === "CLICK_BUTTON" && analysis.elements.length > 0) {
-        // Try to find and click unsubscribe buttons
         for (const element of analysis.elements) {
           if (element.action === "click") {
             try {
-              // Try different methods to find the element
-              let elementHandle = null
-
-              // Try by CSS selector first
-              try {
-                elementHandle = await page.$(element.selector)
-              } catch {}
-
-              // If not found, try by text content
-              if (!elementHandle) {
-                elementHandle = await page.evaluateHandle((text) => {
-                  const elements = Array.from(document.querySelectorAll('button, input[type="submit"], a'))
-                  return elements.find(
-                    (el) =>
-                      el.textContent?.toLowerCase().includes(text.toLowerCase()) ||
-                      el.getAttribute("value")?.toLowerCase().includes(text.toLowerCase()),
-                  )
-                }, element.selector)
+              let locator = page.locator(element.selector)
+              if ((await locator.count()) === 0) {
+                locator = page.getByText(element.selector, { exact: false })
               }
 
-              if (elementHandle && elementHandle.asElement()) {
-                await elementHandle.asElement()!.click()
+              if ((await locator.count()) > 0) {
+                await locator.first().click({ timeout: 5000 })
                 await page.waitForTimeout(2000) // Wait for any redirects
                 success = true
                 details = `Successfully clicked: ${element.selector}`
@@ -252,15 +198,15 @@ export class UnsubscribeAgent {
           }
         }
       } else if (analysis.action === "FILL_FORM" && analysis.elements.length > 0) {
-        // Handle form filling
         for (const element of analysis.elements) {
           try {
+            const locator = page.locator(element.selector)
             if (element.action === "type" && element.value) {
-              await page.type(element.selector, element.value)
+              await locator.fill(element.value)
             } else if (element.action === "select" && element.value) {
-              await page.select(element.selector, element.value)
+              await locator.selectOption(element.value)
             } else if (element.action === "click") {
-              await page.click(element.selector)
+              await locator.click()
             }
           } catch (error) {
             console.error(`Error interacting with element ${element.selector}:`, error)
@@ -269,10 +215,15 @@ export class UnsubscribeAgent {
 
         // Try to submit the form
         try {
-          await page.click('input[type="submit"], button[type="submit"], button:contains("unsubscribe")')
-          await page.waitForTimeout(3000)
-          success = true
-          details = "Form submitted successfully"
+          const submitButton = page.locator(
+            'input[type="submit"], button[type="submit"], button:has-text("Unsubscribe")',
+          )
+          if ((await submitButton.count()) > 0) {
+            await submitButton.first().click()
+            await page.waitForTimeout(3000)
+            success = true
+            details = "Form submitted successfully"
+          }
         } catch (error) {
           details = `Form filled but submission failed: ${error.message}`
         }
