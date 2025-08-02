@@ -186,18 +186,33 @@ export function DashboardLayout() {
     setIsRecategorizing(true)
 
     try {
-      // Ensure uncategorized category exists
+      // Ensure uncategorized exists
       await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
+
+      // Fetch uncategorized email IDs
+      const res = await fetch("/api/emails?category=uncategorized") // Or whatever your uncategorized query is
+      const data = await res.json()
+
+      if (!res.ok || !Array.isArray(data.emails)) {
+        throw new Error("Could not fetch uncategorized emails")
+      }
+
+      const emailIds = data.emails.map((email) => email.id)
+
+      if (emailIds.length === 0) {
+        showSuccessToast("No uncategorized emails", "Nothing to recategorize")
+        return
+      }
 
       const response = await fetch("/api/emails/recategorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ emailIds }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        showSuccessToast("AI Recategorization Complete", `Updated ${data.updated} emails with AI suggestions`)
+        const result = await response.json()
+        showSuccessToast("AI Recategorization Complete", `Updated ${result.updated} emails with AI suggestions`)
         setRefreshTrigger((prev) => prev + 1)
       } else {
         throw new Error("Failed to recategorize emails")
@@ -208,6 +223,7 @@ export function DashboardLayout() {
       setIsRecategorizing(false)
     }
   }
+
 
   const getTotalEmailCount = () => {
     return categories.reduce((sum, cat) => sum + cat.email_count, 0)
