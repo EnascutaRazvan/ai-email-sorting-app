@@ -166,7 +166,7 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Button
+        {/* <Button
           onClick={() => onCategorySelect(null)}
           variant={selectedCategory === null ? "default" : "ghost"}
           className="w-full justify-start"
@@ -177,20 +177,7 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
           <Badge variant="secondary" className="ml-auto">
             {getTotalEmailCount()}
           </Badge>
-        </Button>
-
-        <Button
-          onClick={() => onCategorySelect("uncategorized")}
-          variant={selectedCategory === "uncategorized" ? "default" : "ghost"}
-          className="w-full justify-start"
-          size="sm"
-        >
-          <Folder className="mr-2 h-4 w-4 text-gray-500" />
-          Uncategorized
-          <Badge variant="secondary" className="ml-auto">
-            {/* This would need to be calculated from the API */}0
-          </Badge>
-        </Button>
+        </Button> */}
 
         {categories.map((category) => (
           <div key={category.id} className="group relative">
