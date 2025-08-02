@@ -1,22 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { MailOpen, Trash2, UserX, Sparkles, Loader2 } from "lucide-react"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Button } from "@/components/ui/button"
+import { Mail, Calendar, User, Sparkles, Loader2, AlertCircle, ExternalLink, Archive } from "lucide-react"
+import { showErrorToast } from "@/lib/error-handler"
 
 interface EmailDetailDialogProps {
   emailId: string | null
@@ -24,342 +16,234 @@ interface EmailDetailDialogProps {
   onClose: () => void
 }
 
-interface EmailContent {
-  htmlContent: string
-  textContent: string
-}
-
-interface Category {
+interface EmailDetail {
   id: string
-  name: string
-  color: string
+  subject: string
+  sender: string
+  received_at: string
+  ai_summary: string
+  email_body: string
+  is_read: boolean
+  snippet: string
+  category?: {
+    id: string
+    name: string
+    color: string
+  }
+  account?: {
+    email: string
+    name?: string
+  }
 }
 
 export function EmailDetailDialog({ emailId, isOpen, onClose }: EmailDetailDialogProps) {
-  const [emailContent, setEmailContent] = useState<EmailContent | null>(null)
-  const [emailDetails, setEmailDetails] = useState<any>(null) // To store subject, sender, category etc.
-  const [isLoadingContent, setIsLoadingContent] = useState(true)
-  const [categories, setCategories] = useState<Category[]>([])
-  const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined)
-  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isUnsubscribing, setIsUnsubscribing] = useState(false)
-  const [isUnsubscribeAlertDialogOpen, setIsUnsubscribeAlertDialogOpen] = useState(false)
+  const [email, setEmail] = useState<EmailDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen && emailId) {
-      fetchEmailDetailsAndContent(emailId)
-      fetchCategories()
+    if (emailId && isOpen) {
+      fetchEmailContent()
     } else {
-      // Reset state when dialog closes
-      setEmailContent(null)
-      setEmailDetails(null)
-      setSelectedCategory(undefined)
+      setEmail(null)
+      setError(null)
     }
-  }, [isOpen, emailId])
+  }, [emailId, isOpen])
 
-  const fetchEmailDetailsAndContent = async (id: string) => {
-    setIsLoadingContent(true)
+  const fetchEmailContent = async () => {
+    if (!emailId) return
+
+    setLoading(true)
+    setError(null)
+
     try {
-      // Fetch email details (subject, sender, current category)
-      const detailsResponse = await fetch(`/api/emails?id=${id}`)
-      if (detailsResponse.ok) {
-        const data = await detailsResponse.json()
-        const email = data.emails?.[0] // API returns an array
-        if (email) {
-          setEmailDetails(email)
-          setSelectedCategory(email.category?.id || "uncategorized")
-        } else {
-          throw new Error("Email details not found")
-        }
-      } else {
-        throw new Error("Failed to fetch email details")
-      }
+      const response = await fetch(`/api/emails/${emailId}/content`)
 
-      // Fetch email content
-      const contentResponse = await fetch(`/api/emails/${id}/content`)
-      if (contentResponse.ok) {
-        const data = await contentResponse.json()
-        setEmailContent(data)
+      if (response.ok) {
+        const data = await response.json()
+        setEmail(data.email)
       } else {
-        throw new Error("Failed to fetch email content")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to fetch email content")
       }
     } catch (error) {
+      console.error("Error fetching email:", error)
+      setError(error.message)
       showErrorToast(error, "Fetching Email Content")
-      onClose() // Close dialog on error
     } finally {
-      setIsLoadingContent(false)
+      setLoading(false)
     }
   }
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch("/api/categories")
-      if (response.ok) {
-        const data = await response.json()
-        setCategories(data.categories || [])
-      }
-    } catch (error) {
-      console.error("Error fetching categories:", error)
-    }
+  const formatEmailBody = (body: string) => {
+    if (!body) return "No content available"
+
+    // Basic HTML to text conversion for display
+    return body
+      .replace(/<[^>]*>/g, "") // Remove HTML tags
+      .replace(/&nbsp;/g, " ") // Replace &nbsp; with spaces
+      .replace(/&amp;/g, "&") // Replace &amp; with &
+      .replace(/&lt;/g, "<") // Replace &lt; with <
+      .replace(/&gt;/g, ">") // Replace &gt; with >
+      .replace(/&quot;/g, '"') // Replace &quot; with "
+      .trim()
   }
 
-  const handleCategoryChange = async (newCategoryId: string) => {
-    if (!emailId) return
-
-    setIsUpdatingCategory(true)
-    try {
-      const response = await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailId, categoryId: newCategoryId }),
-      })
-      if (response.ok) {
-        setSelectedCategory(newCategoryId)
-        showSuccessToast("Category Updated", "Email category updated successfully.")
-        // Update emailDetails to reflect new category
-        setEmailDetails((prev: any) => ({
-          ...prev,
-          category: categories.find((cat) => cat.id === newCategoryId),
-        }))
-      } else {
-        throw new Error("Failed to update category")
-      }
-    } catch (error) {
-      showErrorToast(error, "Update Category")
-    } finally {
-      setIsUpdatingCategory(false)
-    }
+  const getSenderInitials = (sender: string) => {
+    const match = sender.match(/^([^<]+)/)
+    const name = match ? match[1].trim() : sender
+    return name
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
   }
 
-  const handleMarkAsReadUnread = async (readStatus: boolean) => {
-    if (!emailId) return
-
-    try {
-      const response = await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailId, isRead: readStatus }),
-      })
-      if (response.ok) {
-        setEmailDetails((prev: any) => ({ ...prev, is_read: readStatus }))
-        showSuccessToast("Email Status Updated", `Email marked as ${readStatus ? "read" : "unread"}.`)
-      } else {
-        throw new Error("Failed to update read status")
-      }
-    } catch (error) {
-      showErrorToast(error, "Update Read Status")
-    }
+  const getSenderName = (sender: string) => {
+    const match = sender.match(/^([^<]+)/)
+    return match ? match[1].trim() : sender
   }
 
-  const handleDeleteEmail = async () => {
-    if (!emailId) return
-
-    setIsDeleting(true)
-    try {
-      const response = await fetch("/api/emails/bulk-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds: [emailId] }),
-      })
-
-      if (response.ok) {
-        showSuccessToast("Email Deleted", "Email moved to trash and removed from your list.")
-        onClose() // Close dialog after successful deletion
-      } else {
-        throw new Error("Failed to delete email")
-      }
-    } catch (error) {
-      showErrorToast(error, "Delete Email")
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  const handleUnsubscribe = async () => {
-    if (!emailId) return
-
-    setIsUnsubscribing(true)
-    setIsUnsubscribeAlertDialogOpen(false) // Close the alert dialog
-    try {
-      const response = await fetch("/api/emails/bulk-unsubscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds: [emailId] }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const result = data.results[0]
-        if (result.success) {
-          showSuccessToast("Unsubscribe Successful", result.summary)
-          onClose() // Close dialog after successful unsubscribe
-        } else {
-          showErrorToast(result.summary, "Unsubscribe Failed")
-        }
-      } else {
-        throw new Error("Failed to process unsubscribe request")
-      }
-    } catch (error) {
-      showErrorToast(error, "Unsubscribe")
-    } finally {
-      setIsUnsubscribing(false)
-    }
-  }
-
-  const getCategoryColor = (categoryId: string | undefined) => {
-    if (!categoryId) return "#9CA3AF" // Default gray for uncategorized or unknown
-    const category = categories.find((cat) => cat.id === categoryId)
-    return category?.color || "#9CA3AF"
+  const getSenderEmail = (sender: string) => {
+    const match = sender.match(/<([^>]+)>/)
+    return match ? match[1] : sender
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px] h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-xl font-bold text-foreground">
-            {emailDetails?.subject || "Loading Subject..."}
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col bg-white">
+        <DialogHeader className="flex-shrink-0 border-b pb-4">
+          <DialogTitle className="flex items-center text-lg text-gray-900">
+            <Mail className="mr-2 h-5 w-5 text-blue-600" />
+            Email Details
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            From: {emailDetails?.sender || "Loading Sender..."}
-            {emailDetails?.account?.email && ` (via ${emailDetails.account.email})`}
+          <DialogDescription className="text-gray-600">
+            View the full email content with AI-generated summary
           </DialogDescription>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {emailDetails?.category && (
-              <Badge
-                variant="secondary"
-                style={{
-                  backgroundColor: `${emailDetails.category.color}15`,
-                  color: emailDetails.category.color,
-                  borderColor: `${emailDetails.category.color}30`,
-                }}
-                className="text-xs border"
-              >
-                {emailDetails.category.name}
-              </Badge>
-            )}
-            {emailDetails?.ai_summary && (
-              <Badge
-                variant="outline"
-                className="text-xs bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-1"
-              >
-                <Sparkles className="h-3 w-3" />
-                AI Summary
-              </Badge>
-            )}
-            {emailDetails?.is_read ? (
-              <Badge
-                variant="outline"
-                className="text-xs bg-gray-50 text-gray-600 border-gray-300 flex items-center gap-1"
-              >
-                <MailOpen className="h-3 w-3" /> Read
-              </Badge>
-            ) : (
-              <Badge
-                variant="outline"
-                className="text-xs bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1"
-              >
-                <MailOpen className="h-3 w-3" /> Unread
-              </Badge>
-            )}
-          </div>
         </DialogHeader>
 
-        <div className="flex-shrink-0 flex items-center gap-2 border-b pb-3">
-          <Select value={selectedCategory} onValueChange={handleCategoryChange} disabled={isUpdatingCategory}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Change Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                    {category.name}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-2 text-gray-600">Loading email content...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center justify-center py-12 text-red-600">
+            <AlertCircle className="h-8 w-8 mr-2" />
+            <span>Failed to load email: {error}</span>
+          </div>
+        )}
+
+        {email && !loading && !error && (
+          <div className="flex-1 min-h-0 space-y-6">
+            {/* Email Header */}
+            <div className="space-y-4">
+              <div className="flex items-start space-x-4">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                    {getSenderInitials(email.sender)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-semibold text-gray-900 break-words leading-tight">{email.subject}</h2>
+                  <div className="flex items-center space-x-3 text-sm text-gray-600 mt-2">
+                    <div className="flex items-center">
+                      <User className="h-4 w-4 mr-1" />
+                      <span className="font-medium">{getSenderName(email.sender)}</span>
+                    </div>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-gray-500">{getSenderEmail(email.sender)}</span>
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleMarkAsReadUnread(!emailDetails?.is_read)}
-            disabled={!emailDetails}
-          >
-            {emailDetails?.is_read ? (
-              <>
-                <MailOpen className="mr-2 h-4 w-4" /> Mark as Unread
-              </>
-            ) : (
-              <>
-                <MailOpen className="mr-2 h-4 w-4" /> Mark as Read
-              </>
-            )}
-          </Button>
-          <Button variant="outline" size="sm" disabled={isDeleting} onClick={handleDeleteEmail}>
-            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-            Delete
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isUnsubscribing}
-            onClick={() => setIsUnsubscribeAlertDialogOpen(true)}
-          >
-            {isUnsubscribing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserX className="mr-2 h-4 w-4" />}
-            Unsubscribe
-          </Button>
-        </div>
+                  <div className="flex items-center space-x-3 text-sm text-gray-500 mt-1">
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      <span>{new Date(email.received_at).toLocaleString()}</span>
+                    </div>
+                    {email.account && (
+                      <>
+                        <span className="text-gray-400">•</span>
+                        <span>to {email.account.email}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-3">
+                    {email.category && (
+                      <Badge
+                        style={{
+                          backgroundColor: `${email.category.color}15`,
+                          color: email.category.color,
+                          borderColor: `${email.category.color}30`,
+                        }}
+                        className="border"
+                      >
+                        {email.category.name}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      <Archive className="h-3 w-3 mr-1" />
+                      Archived
+                    </Badge>
+                    <Badge variant={email.is_read ? "secondary" : "default"} className="text-xs">
+                      {email.is_read ? "Read" : "Unread"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
 
-        <div className="flex-1 overflow-auto border rounded-md p-4 bg-muted/20 text-foreground">
-          {isLoadingContent ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading email content...</span>
+              {/* AI Summary */}
+              {email.ai_summary && (
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-100">
+                  <div className="flex items-center mb-3">
+                    <Sparkles className="h-5 w-5 text-purple-600 mr-2" />
+                    <h3 className="text-sm font-semibold text-purple-900">AI Summary</h3>
+                  </div>
+                  <p className="text-sm text-purple-800 leading-relaxed">{email.ai_summary}</p>
+                </div>
+              )}
             </div>
-          ) : emailContent?.htmlContent ? (
-            <iframe
-              srcDoc={emailContent.htmlContent}
-              className="w-full h-full border-none bg-white dark:bg-background"
-              title="Email Content"
-              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-scripts"
-            />
-          ) : emailContent?.textContent ? (
-            <pre className="whitespace-pre-wrap font-sans text-sm">{emailContent.textContent}</pre>
-          ) : (
-            <div className="text-center text-muted-foreground">No content available for this email.</div>
-          )}
-        </div>
 
-        {emailDetails?.ai_summary && (
-          <div className="flex-shrink-0 mt-4 p-3 rounded-md bg-gradient-to-r from-purple-50/50 to-blue-50/50 dark:from-purple-950/50 dark:to-blue-950/50 border border-purple-100/50 dark:border-purple-900/50">
-            <div className="flex items-center mb-1">
-              <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400 mr-2" />
-              <span className="text-sm font-semibold text-purple-900 dark:text-purple-200">AI Summary</span>
+            <Separator />
+
+            {/* Email Body */}
+            <div className="flex-1 min-h-0">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Email Content</h3>
+                <Button variant="outline" size="sm" className="text-xs bg-transparent">
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  View Original
+                </Button>
+              </div>
+              <ScrollArea className="h-[400px] w-full rounded-lg border bg-gray-50/50 p-6">
+                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">
+                  {formatEmailBody(email.email_body) || email.snippet || "No content available"}
+                </div>
+              </ScrollArea>
             </div>
-            <p className="text-sm text-purple-800 dark:text-purple-300 leading-relaxed">{emailDetails.ai_summary}</p>
+
+            {/* Footer Info */}
+            <div className="flex-shrink-0 bg-gray-50 rounded-lg p-4 border">
+              <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                <div>
+                  <span className="font-medium">Account:</span> {email.account?.email || "Unknown"}
+                </div>
+                <div>
+                  <span className="font-medium">Status:</span> {email.is_read ? "Read" : "Unread"}
+                </div>
+                <div>
+                  <span className="font-medium">Received:</span> {new Date(email.received_at).toLocaleDateString()}
+                </div>
+                <div>
+                  <span className="font-medium">Category:</span> {email.category?.name || "Uncategorized"}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </DialogContent>
-
-      <AlertDialog open={isUnsubscribeAlertDialogOpen} onOpenChange={setIsUnsubscribeAlertDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Unsubscribe</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to attempt to unsubscribe from emails from "{emailDetails?.sender}"? This action
-              will try to find an unsubscribe link or email and may move this email to trash.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleUnsubscribe} className="bg-orange-600 text-white hover:bg-orange-700">
-              Confirm Unsubscribe
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Dialog>
   )
 }

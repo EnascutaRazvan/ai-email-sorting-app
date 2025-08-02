@@ -1,10 +1,11 @@
 "use client"
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { CheckCircle, XCircle, ExternalLink } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { CheckCircle, XCircle, Mail, ExternalLink, ImageIcon, Eye } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useState } from "react"
 
 interface UnsubscribeResult {
   emailId: string
@@ -39,93 +40,128 @@ export function UnsubscribeResultsDialog({
   totalProcessed,
   totalSuccessful,
 }: UnsubscribeResultsDialogProps) {
+  const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null)
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] flex flex-col bg-card text-card-foreground border-border">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-xl font-bold text-foreground">Unsubscribe Results</DialogTitle>
-          <DialogDescription className="text-muted-foreground">Summary of bulk unsubscribe attempts.</DialogDescription>
-          <div className="flex items-center gap-4 mt-2">
-            <Badge variant="secondary" className="bg-primary/10 text-primary">
-              Processed: {totalProcessed}
-            </Badge>
-            <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400">
-              Successful: {totalSuccessful}
-            </Badge>
-            <Badge variant="secondary" className="bg-destructive/10 text-destructive">
-              Failed: {totalProcessed - totalSuccessful}
-            </Badge>
-          </div>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Mail className="mr-2 h-5 w-5 text-blue-600" />
+              Unsubscribe Results
+            </DialogTitle>
+            <DialogDescription>
+              Processed {totalProcessed} emails, {totalSuccessful} successful unsubscribes
+            </DialogDescription>
+          </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
-          <div className="space-y-4">
-            {results.map((result) => (
-              <div key={result.emailId} className="border rounded-lg p-4 bg-background/50 border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {result.success ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-destructive" />
-                    )}
-                    <h3 className="font-semibold text-foreground">{result.subject}</h3>
+          <ScrollArea className="flex-1 max-h-[60vh]">
+            <div className="space-y-4">
+              {results.map((result) => (
+                <div
+                  key={result.emailId}
+                  className={`p-4 rounded-lg border ${
+                    result.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">{result.subject}</h3>
+                      <p className="text-sm text-gray-600 truncate">From: {result.sender}</p>
+                    </div>
+                    <Badge variant={result.success ? "default" : "destructive"} className="ml-2">
+                      {result.success ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      {result.success ? "Success" : "Failed"}
+                    </Badge>
                   </div>
-                  <Badge variant={result.success ? "default" : "destructive"} className="text-xs">
-                    {result.success ? "Success" : "Failed"}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">From: {result.sender}</p>
-                <p className="text-sm text-foreground mb-3">{result.summary}</p>
 
-                {result.details.length > 0 && (
-                  <div className="space-y-2 mt-3 border-t border-border pt-3">
-                    <p className="text-sm font-medium text-foreground">Attempt Details:</p>
-                    {result.details.map((detail, index) => (
-                      <div key={index} className="flex items-start gap-2 text-sm">
-                        {detail.result.success ? (
-                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-1" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-1" />
-                        )}
-                        <div className="flex-1">
-                          <p className="text-foreground">
-                            Method:{" "}
-                            <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-                              {detail.result.method}
-                            </span>
-                          </p>
-                          {detail.link && (
-                            <p className="text-muted-foreground">
-                              Link:{" "}
-                              <a
-                                href={detail.link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1"
-                              >
-                                {detail.link.text || detail.link.url} <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </p>
-                          )}
-                          {detail.result.error && <p className="text-destructive">Error: {detail.result.error}</p>}
-                          {detail.result.details && (
-                            <p className="text-muted-foreground">Details: {detail.result.details}</p>
-                          )}
+                  <p className="text-sm text-gray-700 mb-3">{result.summary}</p>
+
+                  {result.details.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium text-gray-800 uppercase tracking-wide">
+                        Unsubscribe Links Processed:
+                      </h4>
+                      {result.details.map((detail, index) => (
+                        <div key={index} className="flex items-start justify-between p-3 bg-white/50 rounded border">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <ExternalLink className="h-3 w-3 text-gray-400" />
+                              <span className="text-xs text-gray-600 truncate">{detail.link.url}</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="font-medium text-gray-700">Method:</span>
+                                <span className="ml-1 text-gray-600">{detail.result.method}</span>
+                              </div>
+
+                              {detail.result.details && (
+                                <div className="md:col-span-2">
+                                  <span className="font-medium text-gray-700">Details:</span>
+                                  <p className="text-gray-600 mt-1">{detail.result.details}</p>
+                                </div>
+                              )}
+
+                              {detail.result.error && (
+                                <div className="md:col-span-2">
+                                  <span className="font-medium text-red-700">Error:</span>
+                                  <p className="text-red-600 mt-1">{detail.result.error}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {detail.result.screenshot && (
+                              <div className="mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedScreenshot(detail.result.screenshot!)}
+                                  className="text-xs"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View Screenshot
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          <Badge variant={detail.result.success ? "default" : "secondary"} className="text-xs ml-2">
+                            {detail.result.success ? "✓" : "✗"}
+                          </Badge>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
-        <div className="flex justify-end flex-shrink-0 pt-4 border-t border-border">
-          <Button onClick={onClose}>Close</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      {/* Screenshot Modal */}
+      <Dialog open={!!selectedScreenshot} onOpenChange={() => setSelectedScreenshot(null)}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <ImageIcon className="mr-2 h-5 w-5" />
+              Unsubscribe Page Screenshot
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedScreenshot && (
+            <div className="flex justify-center">
+              <img
+                src={selectedScreenshot || "/placeholder.svg"}
+                alt="Unsubscribe page screenshot"
+                className="max-w-full max-h-[70vh] object-contain border rounded"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

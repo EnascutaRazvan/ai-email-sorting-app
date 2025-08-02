@@ -1,68 +1,44 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { authOptions } from "../../auth/[...nextauth]/route"
+import { createClient } from "@supabase/supabase-js"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Prevent deletion of primary account
+    const { data: account, error: fetchError } = await supabase
+      .from("user_accounts")
+      .select("is_primary")
+      .eq("id", params.id)
+      .eq("user_id", session.user.id)
+      .single()
+
+    if (fetchError || !account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
+    }
+
+    if (account.is_primary) {
+      return NextResponse.json({ error: "Cannot remove primary account" }, { status: 400 })
+    }
+
+    const { error } = await supabase.from("user_accounts").delete().eq("id", params.id).eq("user_id", session.user.id)
+
+    if (error) {
+      console.error("Error deleting account:", error)
+      return NextResponse.json({ error: "Failed to delete account" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-
-  const supabase = createClient()
-  const { id } = params
-
-  const { data: account, error } = await supabase
-    .from("accounts")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", session.user.id)
-    .single()
-
-  if (error) {
-    console.error("Error fetching account:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  if (!account) {
-    return NextResponse.json({ error: "Account not found" }, { status: 404 })
-  }
-
-  return NextResponse.json({ account })
-}
-
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const supabase = createClient()
-  const { id } = params
-
-  // First, delete all emails associated with this account
-  const { error: deleteEmailsError } = await supabase
-    .from("emails")
-    .delete()
-    .eq("account_id", id)
-    .eq("user_id", session.user.id)
-
-  if (deleteEmailsError) {
-    console.error("Error deleting associated emails:", deleteEmailsError)
-    return NextResponse.json({ error: deleteEmailsError.message }, { status: 500 })
-  }
-
-  // Then, delete the account itself
-  const { error: deleteAccountError } = await supabase
-    .from("accounts")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", session.user.id)
-
-  if (deleteAccountError) {
-    console.error("Error deleting account:", deleteAccountError)
-    return NextResponse.json({ error: deleteAccountError.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ message: "Account and associated emails deleted successfully" })
 }

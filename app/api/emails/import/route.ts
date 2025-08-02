@@ -1,247 +1,313 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { authOptions } from "../../auth/[...nextauth]/route"
-import { google } from "googleapis"
+import { createClient } from "@supabase/supabase-js"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { groq } from "@ai-sdk/groq"
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+interface GmailMessage {
+  id: string
+  threadId: string
+  labelIds: string[]
+  snippet: string
+  payload: {
+    headers: Array<{ name: string; value: string }>
+    body?: { data?: string }
+    parts?: Array<{ body?: { data?: string }; mimeType?: string }>
   }
+  internalDate: string
+}
 
-  const supabase = createClient()
-  const { accountId, maxEmails = 50 } = await request.json() // Default to 50 emails
-
-  if (!accountId) {
-    return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    // Fetch account details to get Gmail tokens
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { accountId, isScheduled = false } = await request.json()
+
+    if (!accountId) {
+      return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
+    }
+
+    // Get the account details
     const { data: account, error: accountError } = await supabase
-      .from("accounts")
-      .select("access_token, refresh_token, expires_at, user_id")
+      .from("user_accounts")
+      .select("*")
       .eq("id", accountId)
       .eq("user_id", session.user.id)
       .single()
 
     if (accountError || !account) {
-      console.error("Error fetching account:", accountError)
-      return NextResponse.json({ error: "Account not found or unauthorized" }, { status: 404 })
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
-    oauth2Client.setCredentials({
-      access_token: account.access_token,
-      refresh_token: account.refresh_token,
-      expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
-    })
-
-    // Refresh token if expired
-    if (oauth2Client.isTokenExpired()) {
-      const { credentials } = await oauth2Client.refreshAccessToken()
-      await supabase
-        .from("accounts")
-        .update({
-          access_token: credentials.access_token,
-          refresh_token: credentials.refresh_token,
-          expires_at: credentials.expiry_date ? Math.floor(credentials.expiry_date / 1000) : null,
-        })
-        .eq("id", accountId)
-      oauth2Client.setCredentials(credentials) // Update client with new tokens
-    }
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client })
-
-    // Fetch emails
-    const response = await gmail.users.messages.list({
-      userId: "me",
-      maxResults: maxEmails,
-      q: "in:inbox", // Only fetch emails in the inbox
-    })
-
-    const messages = response.data.messages || []
-    let importedCount = 0
-    let categorizedCount = 0
-
-    // Ensure 'Uncategorized' category exists for the user
-    const { data: uncategorizedData, error: uncategorizedError } = await supabase
+    // Get user categories for AI categorization
+    const { data: categories, error: categoriesError } = await supabase
       .from("categories")
-      .select("id")
+      .select("*")
       .eq("user_id", session.user.id)
-      .eq("name", "Uncategorized")
-      .single()
 
-    let uncategorizedCategoryId = uncategorizedData?.id
-    if (uncategorizedError || !uncategorizedCategoryId) {
-      // If 'Uncategorized' doesn't exist, create it
-      const { data: newCategory, error: createCategoryError } = await supabase
-        .from("categories")
-        .insert({ user_id: session.user.id, name: "Uncategorized", color: "#9CA3AF" })
-        .select()
-        .single()
-      if (createCategoryError || !newCategory) {
-        console.error("Failed to create Uncategorized category:", createCategoryError)
-        return NextResponse.json({ error: "Failed to ensure Uncategorized category" }, { status: 500 })
-      }
-      uncategorizedCategoryId = newCategory.id
+    if (categoriesError) {
+      console.error("Error fetching categories:", categoriesError)
+      return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })
     }
 
-    for (const message of messages) {
-      // Check if email already exists in DB
-      const { data: existingEmail } = await supabase
-        .from("emails")
-        .select("id")
-        .eq("message_id", message.id)
-        .eq("account_id", accountId)
-        .single()
+    // Determine the date range for fetching emails
+    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled)
 
-      if (existingEmail) {
-        continue // Skip if email already imported
-      }
+    // Fetch emails from Gmail API with date filtering
+    const gmailQuery = `in:inbox -in:sent ${dateQuery}`
+    const gmailResponse = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(gmailQuery)}&maxResults=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${account.access_token}`,
+        },
+      },
+    )
 
+    if (!gmailResponse.ok) {
+      console.error("Gmail API error:", await gmailResponse.text())
+      return NextResponse.json({ error: "Failed to fetch emails from Gmail" }, { status: 500 })
+    }
+
+    const gmailData = await gmailResponse.json()
+    const messageIds = gmailData.messages || []
+
+    let importedCount = 0
+    let processedCount = 0
+
+    for (const messageRef of messageIds) {
       try {
-        const msg = await gmail.users.messages.get({
-          userId: "me",
-          id: message.id,
-          format: "full",
-        })
+        processedCount++
 
-        const headers = msg.data.payload?.headers || []
+        // Check if email already exists
+        const { data: existingEmail } = await supabase.from("emails").select("id").eq("id", messageRef.id).single()
+
+        if (existingEmail) {
+          continue // Skip if already imported
+        }
+
+        // Fetch full message details
+        const messageResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageRef.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${account.access_token}`,
+            },
+          },
+        )
+
+        if (!messageResponse.ok) {
+          console.error(`Failed to fetch message ${messageRef.id}`)
+          continue
+        }
+
+        const message: GmailMessage = await messageResponse.json()
+
+        // Extract email details
+        const headers = message.payload.headers
         const subject = headers.find((h) => h.name === "Subject")?.value || "No Subject"
-        const sender = headers.find((h) => h.name === "From")?.value || "Unknown Sender"
-        const receivedAt = headers.find((h) => h.name === "Date")?.value || new Date().toISOString()
+        const from = headers.find((h) => h.name === "From")?.value || "Unknown Sender"
+        const date = new Date(Number.parseInt(message.internalDate))
 
-        // Extract snippet (body preview)
-        const snippet = msg.data.snippet || ""
+        // Extract email body
+        const emailBody = extractEmailBody(message.payload)
 
-        // Extract full content (for AI processing)
-        let fullContent = ""
-        if (msg.data.payload?.parts) {
-          const part = msg.data.payload.parts.find((p) => p.mimeType === "text/plain" || p.mimeType === "text/html")
-          if (part?.body?.data) {
-            fullContent = Buffer.from(part.body.data, "base64").toString("utf8")
-          }
-        } else if (msg.data.payload?.body?.data) {
-          fullContent = Buffer.from(msg.data.payload.body.data, "base64").toString("utf8")
-        }
+        // Generate AI summary using Groq
+        const aiSummary = await generateEmailSummary(subject, from, emailBody)
 
-        // AI Categorization and Summary
-        let aiSummary = ""
-        let suggestedCategoryName = "Uncategorized" // Default to Uncategorized
-        let suggestedCategoryId = uncategorizedCategoryId // Default to Uncategorized ID
+        // Categorize email with AI using Groq
+        const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
 
-        try {
-          const { text: aiResponse } = await generateText({
-            model: openai("gpt-4o"), // Using OpenAI for categorization and summary
-            prompt: `Analyze the following email and provide a concise summary (max 50 words) and suggest a single category from the following list: Work, Personal, Promotions, Social, Updates, Forums, Purchases, Finance, Travel, Health, Education, Newsletters, Spam, Uncategorized. If none fit well, use 'Uncategorized'.
-            
-            Email Subject: ${subject}
-            Email Sender: ${sender}
-            Email Snippet: ${snippet}
-            Email Content (first 500 chars): ${fullContent.substring(0, 500)}
-            
-            Format your response as a JSON object with 'summary' and 'category' fields. Example: {"summary": "...", "category": "Work"}`,
-          })
-
-          const parsedAiResponse = JSON.parse(aiResponse)
-          aiSummary = parsedAiResponse.summary || ""
-          suggestedCategoryName = parsedAiResponse.category || "Uncategorized"
-
-          // Fetch or create the suggested category
-          const { data: categoryData, error: categoryError } = await supabase
-            .from("categories")
-            .select("*")
-            .eq("user_id", session.user.id)
-            .eq("name", suggestedCategoryName)
-            .single()
-
-          if (categoryError && categoryError.code === "PGRST116") {
-            // Category not found, create it
-            const defaultColors: { [key: string]: string } = {
-              Work: "#10B981", // Emerald
-              Personal: "#6366F1", // Indigo
-              Promotions: "#F59E0B", // Amber
-              Social: "#EF4444", // Red
-              Updates: "#3B82F6", // Blue
-              Forums: "#8B5CF6", // Violet
-              Purchases: "#EC4899", // Pink
-              Finance: "#06B6D4", // Cyan
-              Travel: "#A855F7", // Purple
-              Health: "#14B8A6", // Teal
-              Education: "#F97316", // Orange
-              Newsletters: "#6B7280", // Gray
-              Spam: "#DC2626", // Red-dark
-              Uncategorized: "#9CA3AF", // Gray
-            }
-            const newColor = defaultColors[suggestedCategoryName] || "#9CA3AF" // Default gray
-
-            const { data: newCategory, error: newCategoryError } = await supabase
-              .from("categories")
-              .insert({
-                user_id: session.user.id,
-                name: suggestedCategoryName,
-                color: newColor,
-              })
-              .select()
-              .single()
-
-            if (newCategoryError) {
-              console.error("Error creating new category:", newCategoryError)
-              // Fallback to Uncategorized if creation fails
-              suggestedCategoryId = uncategorizedCategoryId
-            } else {
-              suggestedCategoryId = newCategory.id
-            }
-          } else if (categoryError) {
-            console.error("Error fetching category:", categoryError)
-            // Fallback to Uncategorized if fetching fails
-            suggestedCategoryId = uncategorizedCategoryId
-          } else {
-            suggestedCategoryId = categoryData.id
-          }
-        } catch (aiError) {
-          console.error("AI categorization/summary failed:", aiError)
-          // If AI fails, ensure it falls back to Uncategorized
-          suggestedCategoryId = uncategorizedCategoryId
-        }
-
-        const { error: insertEmailError } = await supabase.from("emails").insert({
+        // Store email in database
+        const { error: insertError } = await supabase.from("emails").insert({
+          id: message.id,
           user_id: session.user.id,
           account_id: accountId,
-          message_id: msg.data.id,
-          thread_id: msg.data.threadId,
-          subject: subject,
-          sender: sender,
-          snippet: snippet,
-          received_at: new Date(receivedAt).toISOString(),
-          is_read: msg.data.labelIds?.includes("UNREAD") ? false : true,
+          category_id: categoryId,
+          subject,
+          sender: from,
+          snippet: message.snippet,
           ai_summary: aiSummary,
-          category_id: suggestedCategoryId, // Assign the suggested category
-          suggested_category_id: suggestedCategoryId, // Store the AI suggested category
+          received_at: date.toISOString(),
+          is_read: !message.labelIds.includes("UNREAD"),
+          gmail_thread_id: message.threadId,
+          email_body: emailBody,
         })
 
-        if (insertEmailError) {
-          console.error("Error inserting email:", insertEmailError)
-        } else {
-          importedCount++
-          categorizedCount++
+        if (insertError) {
+          console.error("Error inserting email:", insertError)
+          continue
         }
-      } catch (emailFetchError) {
-        console.error(`Error fetching or processing email ${message.id}:`, emailFetchError)
+
+        // Archive email in Gmail
+        await archiveEmailInGmail(message.id, account.access_token)
+
+        importedCount++
+      } catch (error) {
+        console.error(`Error processing message ${messageRef.id}:`, error)
+        continue
       }
     }
 
+    // Update last sync time for the account
+    await supabase
+      .from("user_accounts")
+      .update({
+        last_sync: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId)
+
     return NextResponse.json({
-      message: "Emails imported and categorized successfully",
-      importedCount,
-      categorizedCount,
+      success: true,
+      imported: importedCount,
+      processed: processedCount,
+      message: `Successfully imported ${importedCount} new emails out of ${processedCount} processed`,
     })
-  } catch (error: any) {
-    console.error("Error during email import:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error("Import error:", error)
+    return NextResponse.json({ error: "Failed to import emails" }, { status: 500 })
+  }
+}
+
+async function buildDateQuery(accountId: string, userId: string, isScheduled: boolean): Promise<string> {
+  try {
+    // Get the account's last sync time and creation time
+    const { data: account } = await supabase
+      .from("user_accounts")
+      .select("last_sync, created_at")
+      .eq("id", accountId)
+      .single()
+
+    if (!account) {
+      return "" // No date filter if account not found
+    }
+
+    let afterDate: Date
+
+    if (isScheduled && account.last_sync) {
+      // For scheduled imports, get emails after last sync
+      afterDate = new Date(account.last_sync)
+    } else {
+      // For manual imports or first-time imports, get emails from account creation
+      afterDate = new Date(account.created_at)
+    }
+
+    // Format date for Gmail API (YYYY/MM/DD)
+    const formattedDate = afterDate.toISOString().split("T")[0].replace(/-/g, "/")
+
+    return `after:${formattedDate}`
+  } catch (error) {
+    console.error("Error building date query:", error)
+    return ""
+  }
+}
+
+function extractEmailBody(payload: any): string {
+  if (payload.parts) {
+    // Prefer HTML
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/html" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
+
+    // Fallback to plain text
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
+  }
+
+  if (payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8")
+  }
+
+  return "No content available"
+}
+
+async function generateEmailSummary(subject: string, from: string, body: string): Promise<string> {
+  try {
+    const { text } = await generateText({
+      model: groq("llama-3.1-8b-instant"),
+      prompt: `Summarize this email in 1-2 sentences. Focus on the main purpose and any action items.
+
+Subject: ${subject}
+From: ${from}
+Body: ${body.substring(0, 2000)}...
+
+Summary:`,
+      maxTokens: 100,
+    })
+
+    return text.trim()
+  } catch (error) {
+    console.error("Error generating summary:", error)
+    return "Unable to generate summary"
+  }
+}
+
+async function categorizeEmailWithAI(
+  subject: string,
+  from: string,
+  body: string,
+  categories: any[],
+): Promise<string | null> {
+  if (!categories.length) return null
+
+  try {
+    const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
+
+    const { text } = await generateText({
+      model: groq("llama-3.1-8b-instant"),
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
+
+Available Categories:
+${categoryList}
+
+Email to categorize:
+Subject: ${subject}
+From: ${from}
+Body: ${body.substring(0, 1000)}...
+
+Category:`,
+      maxTokens: 20,
+    })
+
+    const selectedCategory = categories.find(
+      (cat) =>
+        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
+        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
+    )
+
+    return selectedCategory?.id || null
+  } catch (error) {
+    console.error("Error categorizing email:", error)
+    return null
+  }
+}
+
+async function archiveEmailInGmail(messageId: string, accessToken: string): Promise<void> {
+  try {
+    await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        removeLabelIds: ["INBOX"],
+      }),
+    })
+  } catch (error) {
+    console.error("Error archiving email:", error)
   }
 }
