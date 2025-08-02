@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS user_settings (
 -- Create index for user lookup
 CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
 
+-- Add RLS policies
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only access their own settings
+CREATE POLICY "Users can access own settings" ON user_settings
+    FOR ALL USING (auth.uid()::text = user_id);
+
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_user_settings_updated_at()
 RETURNS TRIGGER AS $$

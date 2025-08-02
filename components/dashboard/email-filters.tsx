@@ -1,25 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Filter, ChevronDown, X, CalendarIcon, Sparkles } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Search, Filter, CalendarIcon, X, ChevronDown, Bot, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
-
-interface EmailFiltersProps {
-  onFiltersChange: (filters: EmailFilters) => void
-  accounts: Array<{ id: string; email: string }>
-  categories: Array<{ id: string; name: string; color: string }>
-  onRecategorize: () => void
-  isRecategorizing: boolean
-}
 
 export interface EmailFilters {
   search: string
@@ -31,14 +23,22 @@ export interface EmailFilters {
   senderEmail: string
 }
 
+interface EmailFiltersProps {
+  onFiltersChange: (filters: EmailFilters) => void
+  accounts: Array<{ id: string; email: string }>
+  categories: Array<{ id: string; name: string; color: string }>
+  onRecategorize?: () => void
+  isRecategorizing?: boolean
+}
+
 export function EmailFilters({
   onFiltersChange,
   accounts,
   categories,
   onRecategorize,
-  isRecategorizing,
+  isRecategorizing = false,
 }: EmailFiltersProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const [filters, setFilters] = useState<EmailFilters>({
     search: "",
     categoryIds: [],
@@ -49,14 +49,16 @@ export function EmailFilters({
     senderEmail: "",
   })
 
-  const updateFilters = (newFilters: Partial<EmailFilters>) => {
-    const updatedFilters = { ...filters, ...newFilters }
-    setFilters(updatedFilters)
-    onFiltersChange(updatedFilters)
+  useEffect(() => {
+    onFiltersChange(filters)
+  }, [filters, onFiltersChange])
+
+  const updateFilter = (key: keyof EmailFilters, value: any) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
   const clearFilters = () => {
-    const clearedFilters: EmailFilters = {
+    setFilters({
       search: "",
       categoryIds: [],
       accountId: null,
@@ -64,9 +66,19 @@ export function EmailFilters({
       dateTo: null,
       sender: "",
       senderEmail: "",
-    }
-    setFilters(clearedFilters)
-    onFiltersChange(clearedFilters)
+    })
+  }
+
+  const hasActiveFilters = () => {
+    return (
+      filters.search ||
+      filters.categoryIds.length > 0 ||
+      filters.accountId ||
+      filters.dateFrom ||
+      filters.dateTo ||
+      filters.sender ||
+      filters.senderEmail
+    )
   }
 
   const getActiveFiltersCount = () => {
@@ -80,207 +92,184 @@ export function EmailFilters({
     return count
   }
 
-  const activeFiltersCount = getActiveFiltersCount()
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Search Bar */}
       <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           placeholder="Search emails by subject, sender, or content..."
           value={filters.search}
-          onChange={(e) => updateFilters({ search: e.target.value })}
-          className="pl-4 pr-10"
+          onChange={(e) => updateFilter("search", e.target.value)}
+          className="pl-10 pr-4"
         />
-        {filters.search && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
-            onClick={() => updateFilters({ search: "" })}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
-      {/* Filter Controls */}
-      <div className="flex items-center justify-between">
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      {/* Advanced Filters */}
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <div className="flex items-center justify-between">
           <CollapsibleTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
-              <Filter className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="text-xs text-gray-600 h-8">
+              <Filter className="h-3 w-3 mr-1" />
               Advanced Filters
-              {activeFiltersCount > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
-                  {activeFiltersCount}
+              {hasActiveFilters() && (
+                <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+                  {getActiveFiltersCount()}
                 </Badge>
               )}
-              <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
+              <ChevronDown className={cn("h-3 w-3 ml-1 transition-transform", isExpanded && "rotate-180")} />
             </Button>
           </CollapsibleTrigger>
 
-          <CollapsibleContent className="mt-4 space-y-4 rounded-lg border bg-white p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Account Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Account</Label>
-                <Select
-                  value={filters.accountId || "all"}
-                  onValueChange={(value) => updateFilters({ accountId: value === "all" ? null : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All accounts" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    <SelectItem value="all">All accounts</SelectItem>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="flex items-center space-x-2">
+            {onRecategorize && (
+              <Button
+                onClick={onRecategorize}
+                disabled={isRecategorizing}
+                variant="outline"
+                size="sm"
+                className="text-xs bg-transparent"
+              >
+                {isRecategorizing ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Recategorizing...
+                  </>
+                ) : (
+                  <>
+                    <Bot className="h-3 w-3 mr-1" />
+                    AI Recategorize
+                  </>
+                )}
+              </Button>
+            )}
+            {hasActiveFilters() && (
+              <Button onClick={clearFilters} variant="ghost" size="sm" className="text-xs text-red-600">
+                <X className="h-3 w-3 mr-1" />
+                Clear All
+              </Button>
+            )}
+          </div>
+        </div>
 
-              {/* Sender Name Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Sender Name</Label>
-                <Input
-                  placeholder="Filter by sender name..."
-                  value={filters.sender}
-                  onChange={(e) => updateFilters({ sender: e.target.value })}
-                />
-              </div>
+        <CollapsibleContent className="space-y-4 pt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Account Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-700">Account</Label>
+              <Select
+                value={filters.accountId || "all"}
+                onValueChange={(value) => updateFilter("accountId", value === "all" ? null : value)}
+              >
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="All accounts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              {/* Sender Email Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Sender Email</Label>
-                <Input
-                  placeholder="Filter by sender email..."
-                  value={filters.senderEmail}
-                  onChange={(e) => updateFilters({ senderEmail: e.target.value })}
-                />
-              </div>
+            {/* Sender Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-700">Sender Name</Label>
+              <Input
+                placeholder="Filter by sender name"
+                value={filters.sender}
+                onChange={(e) => updateFilter("sender", e.target.value)}
+                className="text-sm"
+              />
+            </div>
 
-              {/* Date From */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">From Date</Label>
+            {/* Sender Email Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-700">Sender Email</Label>
+              <Input
+                placeholder="Filter by sender email"
+                value={filters.senderEmail}
+                onChange={(e) => updateFilter("senderEmail", e.target.value)}
+                className="text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Date Range Filter */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-700">Date Range</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-600">From Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full justify-start text-left font-normal text-sm",
                         !filters.dateFrom && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateFrom ? format(filters.dateFrom, "PPP") : "Pick a date"}
+                      {filters.dateFrom ? format(filters.dateFrom, "MMM d, yyyy") : "Select date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white">
+                  <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={filters.dateFrom}
-                      onSelect={(date) => updateFilters({ dateFrom: date })}
+                      onSelect={(date) => updateFilter("dateFrom", date)}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
-
-              {/* Date To */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">To Date</Label>
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-600">To Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full justify-start text-left font-normal text-sm",
                         !filters.dateTo && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filters.dateTo ? format(filters.dateTo, "PPP") : "Pick a date"}
+                      {filters.dateTo ? format(filters.dateTo, "MMM d, yyyy") : "Select date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white">
+                  <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={filters.dateTo}
-                      onSelect={(date) => updateFilters({ dateTo: date })}
+                      onSelect={(date) => updateFilter("dateTo", date)}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
-
-            <div className="flex items-center justify-between pt-2 border-t">
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                Clear All Filters
+            {(filters.dateFrom || filters.dateTo) && (
+              <Button
+                onClick={() => {
+                  updateFilter("dateFrom", null)
+                  updateFilter("dateTo", null)
+                }}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-red-600"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear Date Range
               </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* AI Recategorize Button */}
-        <Button
-          onClick={onRecategorize}
-          disabled={isRecategorizing}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2 bg-transparent"
-        >
-          <Sparkles className="h-4 w-4" />
-          {isRecategorizing ? "Recategorizing..." : "AI Recategorize"}
-        </Button>
-      </div>
-
-      {/* Active Filters Display */}
-      {activeFiltersCount > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {filters.search && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Search: {filters.search}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ search: "" })} />
-            </Badge>
-          )}
-          {filters.categoryIds.length > 0 && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Categories: {filters.categoryIds.length} selected
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ categoryIds: [] })} />
-            </Badge>
-          )}
-          {filters.accountId && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Account: {accounts.find((a) => a.id === filters.accountId)?.email}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ accountId: null })} />
-            </Badge>
-          )}
-          {filters.sender && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Sender: {filters.sender}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ sender: "" })} />
-            </Badge>
-          )}
-          {filters.senderEmail && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Email: {filters.senderEmail}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ senderEmail: "" })} />
-            </Badge>
-          )}
-          {(filters.dateFrom || filters.dateTo) && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Date: {filters.dateFrom ? format(filters.dateFrom, "MMM d") : "Start"} -{" "}
-              {filters.dateTo ? format(filters.dateTo, "MMM d") : "End"}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ dateFrom: null, dateTo: null })} />
-            </Badge>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }
