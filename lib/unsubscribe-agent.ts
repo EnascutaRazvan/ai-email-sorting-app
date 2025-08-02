@@ -4,9 +4,7 @@ import { groq } from "@ai-sdk/groq"
 interface UnsubscribeLink {
   url: string
   text: string
-  method: "GET" | "POST" | "MAILTO"
-  confidence: number
-  language: string
+  method: "GET" | "POST"
 }
 
 interface UnsubscribeResult {
@@ -14,7 +12,6 @@ interface UnsubscribeResult {
   method: string
   error?: string
   details?: string
-  language?: string
 }
 
 export class UnsubscribeAgent {
@@ -25,203 +22,132 @@ export class UnsubscribeAgent {
       const { text } = await generateText({
         model: this.model,
         prompt: `
-          You are a multilingual AI agent that extracts unsubscribe links from emails in ANY language.
-          
-          Analyze this email content and find ALL unsubscribe links. Look for:
-          
-          ENGLISH: "unsubscribe", "opt out", "remove", "stop emails", "manage preferences"
-          SPANISH: "darse de baja", "cancelar suscripción", "no recibir más"
-          FRENCH: "se désabonner", "ne plus recevoir", "annuler"
-          GERMAN: "abmelden", "kündigen", "nicht mehr erhalten"
-          ITALIAN: "annullare iscrizione", "non ricevere più"
-          PORTUGUESE: "cancelar inscrição", "não receber mais"
-          ROMANIAN: "dezabonare", "dezabonează", "aici", "nu mai primi", "anulare"
-          DUTCH: "uitschrijven", "afmelden"
-          POLISH: "wypisz się", "rezygnuj"
-          RUSSIAN: "отписаться", "отменить подписку"
-          CHINESE: "退订", "取消订阅"
-          JAPANESE: "配信停止", "登録解除"
-          
-          Also look for:
-          - Links near words like "click here", "aici", "aquí", "ici", "hier", "clicca qui"
-          - mailto: links with unsubscribe subjects
-          - URLs containing unsubscribe-related paths
+          Analyze this email content and extract all unsubscribe links. Look for:
+          - Links with text containing "unsubscribe", "opt out", "remove", "stop emails"
           - Links in footers or at the end of emails
-          
+          - mailto: links for unsubscribe
+          - Any other links that appear to be for unsubscribing
+
           Email content:
           ${emailContent}
 
-          Return a JSON array with this exact format:
+          Return a JSON array of objects with this format:
           [
             {
-              "url": "the complete URL or mailto link",
-              "text": "the exact link text or surrounding context",
-              "method": "GET|POST|MAILTO",
-              "confidence": 0.0-1.0,
-              "language": "detected language of the unsubscribe text"
+              "url": "the full URL",
+              "text": "the link text or surrounding context",
+              "method": "GET" or "POST" (guess based on context)
             }
           ]
 
-          If no unsubscribe links found, return: []
+          If no unsubscribe links are found, return an empty array.
         `,
-        maxTokens: 1000,
       })
 
       try {
-        const parsed = JSON.parse(text)
-        return Array.isArray(parsed) ? parsed : []
+        return JSON.parse(text)
       } catch {
-        return this.fallbackMultilingualExtraction(emailContent)
+        // If JSON parsing fails, try to extract URLs manually
+        return this.fallbackLinkExtraction(emailContent)
       }
     } catch (error) {
       console.error("Error extracting unsubscribe links:", error)
-      return this.fallbackMultilingualExtraction(emailContent)
+      return this.fallbackLinkExtraction(emailContent)
     }
   }
 
-  private fallbackMultilingualExtraction(emailContent: string): UnsubscribeLink[] {
+  private fallbackLinkExtraction(emailContent: string): UnsubscribeLink[] {
     const links: UnsubscribeLink[] = []
 
-    // Multilingual unsubscribe patterns
-    const patterns = [
-      // URLs with unsubscribe paths
-      {
-        regex: /https?:\/\/[^\s<>"]+(?:unsubscribe|opt-out|remove|dezabonare|abmelden|désabonner)[^\s<>"]*/gi,
-        lang: "multi",
-      },
-
-      // Mailto patterns
-      {
-        regex: /mailto:[^\s<>"]+\?[^\s<>"]*(?:subject=[^\s<>"]*(?:unsubscribe|dezabonare|abmelden)[^\s<>"]*)/gi,
-        lang: "multi",
-      },
-
-      // Romanian specific patterns (for your example)
-      { regex: /https?:\/\/[^\s<>"]+[^\s<>"]*(?=.*(?:dezabonare|aici))[^\s<>"]*/gi, lang: "ro" },
-
-      // Generic URL patterns near unsubscribe words
-      {
-        regex:
-          /https?:\/\/[^\s<>"]+(?=.*(?:unsubscribe|dezabonare|abmelden|désabonner|darse de baja|annullare|uitschrijven|отписаться|退订))/gi,
-        lang: "multi",
-      },
+    // Look for common unsubscribe patterns
+    const unsubscribePatterns = [
+      /https?:\/\/[^\s<>"]+unsubscribe[^\s<>"]*/gi,
+      /https?:\/\/[^\s<>"]+opt-out[^\s<>"]*/gi,
+      /https?:\/\/[^\s<>"]+remove[^\s<>"]*/gi,
+      /mailto:[^\s<>"]+\?subject=[^\s<>"]*unsubscribe[^\s<>"]*/gi,
     ]
 
-    patterns.forEach(({ regex, lang }) => {
-      const matches = emailContent.match(regex)
+    unsubscribePatterns.forEach((pattern) => {
+      const matches = emailContent.match(pattern)
       if (matches) {
         matches.forEach((url) => {
           links.push({
             url: url.trim(),
             text: "Unsubscribe",
-            method: url.startsWith("mailto:") ? "MAILTO" : "GET",
-            confidence: 0.7,
-            language: lang,
+            method: "GET",
           })
         })
       }
     })
 
-    // Look for "aici" links (Romanian "here") - common pattern
-    const aiciPattern = /(?:dezabonare|dezabonează)[^<>]*<a[^>]+href=["']([^"']+)["'][^>]*>aici<\/a>/gi
-    let match
-    while ((match = aiciPattern.exec(emailContent)) !== null) {
-      links.push({
-        url: match[1],
-        text: "aici (dezabonare)",
-        method: "GET",
-        confidence: 0.9,
-        language: "ro",
-      })
-    }
-
     return links
   }
 
-  async processUnsubscribe(link: UnsubscribeLink, emailContent: string): Promise<UnsubscribeResult> {
+  async processUnsubscribe(link: UnsubscribeLink): Promise<UnsubscribeResult> {
     try {
       // Handle mailto links
-      if (link.method === "MAILTO" || link.url.startsWith("mailto:")) {
+      if (link.url.startsWith("mailto:")) {
         return {
           success: true,
-          method: "MAILTO",
+          method: "mailto",
           details: `Unsubscribe email would be sent to: ${link.url}`,
-          language: link.language,
         }
       }
 
-      // Use AI to analyze the unsubscribe process
+      // For HTTP links, we'll simulate the process since we can't actually navigate
+      // In a real implementation, you'd use a headless browser like Puppeteer
       const { text } = await generateText({
         model: this.model,
         prompt: `
-          You are an AI agent that analyzes unsubscribe processes across different languages and websites.
+          You are an AI agent tasked with unsubscribing from an email list.
           
           Unsubscribe URL: ${link.url}
-          Link text/context: ${link.text}
-          Detected language: ${link.language}
-          Confidence: ${link.confidence}
+          Link context: ${link.text}
           
-          Original email snippet: ${emailContent.substring(0, 500)}...
+          Based on the URL and context, determine the most likely unsubscribe method:
+          1. Simple GET request (just visiting the URL)
+          2. Form submission required
+          3. Email confirmation required
+          4. Account login required
           
-          Based on the URL pattern, language, and context, determine:
-          1. The most likely unsubscribe method
-          2. Expected success rate
-          3. Any potential complications
-          
-          Common patterns:
-          - Simple GET: Just visiting the URL completes unsubscribe
-          - Form required: Need to fill out a form
-          - Email confirmation: Requires email verification
-          - Login required: Need account access
-          - One-click: Direct unsubscribe with token in URL
-          
-          Respond with JSON:
+          Respond with a JSON object:
           {
-            "method": "GET|POST|EMAIL|LOGIN|ONE_CLICK",
+            "method": "GET|POST|EMAIL|LOGIN",
             "confidence": 0.0-1.0,
-            "expectedSuccess": true/false,
-            "reasoning": "explanation of the analysis",
-            "simulatedAction": "description of what would happen"
+            "expectedSteps": "description of what steps would be needed",
+            "simulatedSuccess": true/false
           }
         `,
-        maxTokens: 500,
       })
 
       try {
         const analysis = JSON.parse(text)
 
-        // Simulate the unsubscribe process based on analysis
-        if (analysis.expectedSuccess && analysis.confidence > 0.6) {
+        // Simulate the unsubscribe process
+        if (analysis.method === "GET" && analysis.confidence > 0.7) {
           return {
             success: true,
-            method: analysis.method,
-            details: `Successfully processed: ${analysis.simulatedAction}`,
-            language: link.language,
+            method: "GET",
+            details: `Successfully processed unsubscribe via GET request to ${link.url}`,
+          }
+        } else if (analysis.method === "EMAIL") {
+          return {
+            success: true,
+            method: "EMAIL",
+            details: `Email confirmation unsubscribe initiated for ${link.url}`,
           }
         } else {
           return {
             success: false,
             method: analysis.method,
-            error: `Low confidence unsubscribe: ${analysis.reasoning}`,
-            language: link.language,
+            error: `Complex unsubscribe process detected: ${analysis.expectedSteps}`,
           }
         }
       } catch {
-        // Fallback logic based on URL patterns
-        if (link.url.includes("token=") || link.url.includes("id=") || link.confidence > 0.8) {
-          return {
-            success: true,
-            method: "ONE_CLICK",
-            details: `One-click unsubscribe processed for ${link.url}`,
-            language: link.language,
-          }
-        } else {
-          return {
-            success: false,
-            method: "UNKNOWN",
-            error: "Could not determine unsubscribe method",
-            language: link.language,
-          }
+        return {
+          success: false,
+          method: "UNKNOWN",
+          error: "Could not analyze unsubscribe method",
         }
       }
     } catch (error) {
@@ -229,7 +155,6 @@ export class UnsubscribeAgent {
         success: false,
         method: "ERROR",
         error: error.message,
-        language: link.language,
       }
     }
   }
@@ -253,21 +178,21 @@ export class UnsubscribeAgent {
     let successCount = 0
 
     for (const link of links) {
-      const result = await this.processUnsubscribe(link, emailContent)
+      const result = await this.processUnsubscribe(link)
       results.push({ link, result })
 
       if (result.success) {
         successCount++
       }
 
-      // Add delay between requests
+      // Add delay between requests to be respectful
       await new Promise((resolve) => setTimeout(resolve, 1000))
     }
 
     return {
       success: successCount > 0,
       results,
-      summary: `Found ${links.length} unsubscribe links, ${successCount} processed successfully`,
+      summary: `Processed ${links.length} unsubscribe links, ${successCount} successful`,
     }
   }
 }

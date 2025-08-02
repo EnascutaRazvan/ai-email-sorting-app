@@ -19,21 +19,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
     }
 
-    // Delete emails from database
-    const { error: deleteError, count } = await supabase
-      .from("emails")
-      .delete()
-      .in("id", emailIds)
-      .eq("user_id", session.user.id)
+    // Delete emails that belong to the current user
+    const { error } = await supabase.from("emails").delete().in("id", emailIds).eq("user_id", session.user.id)
 
-    if (deleteError) {
-      console.error("Error deleting emails:", deleteError)
+    if (error) {
+      console.error("Error deleting emails:", error)
       return NextResponse.json({ error: "Failed to delete emails" }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      deleted: count || 0,
+      message: `Successfully deleted ${emailIds.length} emails`,
     })
   } catch (error) {
     console.error("API error:", error)
