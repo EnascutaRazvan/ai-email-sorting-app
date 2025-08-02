@@ -12,7 +12,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
-import { EmailImportButton } from "./email-import-button"
+import { EmailImportDialog } from "./email-import-dialog"
+import { UserSettingsDialog } from "./user-settings-dialog"
 import { cn } from "@/lib/utils"
 
 interface ConnectedAccount {
@@ -159,14 +160,14 @@ export function ConnectedAccounts() {
 
     if (diffMinutes < 30) {
       return {
-        text: "Recently synced",
+        text: `Last synced on ${lastSync.toLocaleString()}`,
         color: "text-green-600",
         bgColor: "bg-green-100",
         icon: CheckCircle,
       }
     } else if (diffMinutes < 60) {
       return {
-        text: `${diffMinutes}m ago`,
+        text: `Last synced ${diffMinutes}m ago`,
         color: "text-blue-600",
         bgColor: "bg-blue-100",
         icon: Clock,
@@ -175,7 +176,7 @@ export function ConnectedAccounts() {
       const diffHours = Math.floor(diffMinutes / 60)
       if (diffHours < 24) {
         return {
-          text: `${diffHours}h ago`,
+          text: `Last synced ${diffHours}h ago`,
           color: "text-amber-600",
           bgColor: "bg-amber-100",
           icon: Clock,
@@ -183,7 +184,7 @@ export function ConnectedAccounts() {
       } else {
         const diffDays = Math.floor(diffHours / 24)
         return {
-          text: `${diffDays}d ago`,
+          text: `Last synced ${diffDays}d ago`,
           color: "text-red-600",
           bgColor: "bg-red-100",
           icon: AlertCircle,
@@ -227,19 +228,21 @@ export function ConnectedAccounts() {
                 {accounts.length}
               </Badge>
             </CardTitle>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <Info className="h-4 w-4 text-gray-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-xs">
-                <p className="text-xs">
-                  Emails are automatically imported every 15 minutes. Secured with Google OAuth 2.0 - your credentials
-                  are never stored.
-                </p>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-center space-x-1">
+              <UserSettingsDialog onSettingsChange={fetchConnectedAccounts} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Info className="h-4 w-4 text-gray-400" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-xs">
+                  <p className="text-xs">
+                    Emails are automatically imported based on your sync settings. Secured with Google OAuth 2.0.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -249,7 +252,7 @@ export function ConnectedAccounts() {
               <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
                 <div className="flex items-center">
                   <Shield className="h-3 w-3 mr-1" />
-                  Security & Auto-sync Info
+                  Security & Sync Information
                 </div>
                 <ChevronDown className={cn("h-3 w-3 transition-transform", isInfoExpanded && "rotate-180")} />
               </Button>
@@ -258,7 +261,7 @@ export function ConnectedAccounts() {
               <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
                 <div className="flex items-center">
                   <Zap className="h-3 w-3 text-blue-600 mr-1" />
-                  <span className="font-medium">Auto-sync:</span> New emails imported every 15 minutes
+                  <span className="font-medium">Auto-sync:</span> Configurable in settings (default: every 15 minutes)
                 </div>
                 <div className="flex items-center">
                   <Shield className="h-3 w-3 text-green-600 mr-1" />
@@ -345,7 +348,9 @@ export function ConnectedAccounts() {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>
-                                Last sync: {account.last_sync ? new Date(account.last_sync).toLocaleString() : "Never"}
+                                {account.last_sync
+                                  ? `Last synced: ${new Date(account.last_sync).toLocaleString()}`
+                                  : "This account has never been synced"}
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -379,7 +384,7 @@ export function ConnectedAccounts() {
           )}
 
           {/* Email Import Button */}
-          {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={fetchConnectedAccounts} />}
+          {accounts.length > 0 && <EmailImportDialog accounts={accounts} onImportComplete={fetchConnectedAccounts} />}
 
           {/* Connection Dialog */}
           <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
