@@ -15,7 +15,7 @@ interface UnsubscribeResult {
 }
 
 export class UnsubscribeAgent {
-  private model = groq("llama-3.1-70b-versatile")
+  private model = groq("llama-3.3-70b-versatile")
 
   async extractUnsubscribeLinks(emailContent: string): Promise<UnsubscribeLink[]> {
     try {
