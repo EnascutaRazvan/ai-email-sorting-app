@@ -1,0 +1,41 @@
+{
+  "success": true,
+  "emails": [
+    {
+      "id": "email-1",
+      "subject": "Weekly Team Update",
+      "sender": "manager@company.com",
+      "snippet": "Here's this week's team update with important announcements...",
+      "ai_summary": "Weekly team meeting summary with project updates and deadlines",
+      "received_at": "2024-01-15T10:30:00Z",
+      "is_read": false,
+      "category": {
+        "id": "cat-1",
+        "name": "Work",
+        "color": "#3B82F6"
+      },
+      "account": {
+        "email": "user@example.com",
+        "name": "John Doe"
+      }
+    },
+    {
+      "id": "email-2",
+      "subject": "Your Monthly Newsletter",
+      "sender": "newsletter@techblog.com",
+      "snippet": "This month's top articles and tech trends...",
+      "ai_summary": "Monthly tech newsletter with latest industry trends and articles",
+      "received_at": "2024-01-15T09:15:00Z",
+      "is_read": true,
+      "category": {
+        "id": "cat-3",
+        "name": "Newsletters",
+        "color": "#F59E0B"
+      },
+      "account": {
+        "email": "user@example.com",
+        "name": "John Doe"
+      }
+    }
+  ]
+}
