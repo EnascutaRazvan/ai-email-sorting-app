@@ -13,33 +13,30 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const accountId = params.id
-
-    // 1. Delete associated emails first
-    const { error: emailDeleteError } = await supabase
-      .from("emails")
-      .delete()
-      .eq("account_id", accountId)
+    // Prevent deletion of primary account
+    const { data: account, error: fetchError } = await supabase
+      .from("user_accounts")
+      .select("is_primary")
+      .eq("id", params.id)
       .eq("user_id", session.user.id)
+      .single()
 
-    if (emailDeleteError) {
-      console.error("Error deleting emails for account:", emailDeleteError)
-      return NextResponse.json({ error: "Failed to delete associated emails" }, { status: 500 })
+    if (fetchError || !account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    // 2. Delete the user account
-    const { error: accountDeleteError } = await supabase
-      .from("user_accounts")
-      .delete()
-      .eq("id", accountId)
-      .eq("user_id", session.user.id)
+    if (account.is_primary) {
+      return NextResponse.json({ error: "Cannot remove primary account" }, { status: 400 })
+    }
 
-    if (accountDeleteError) {
-      console.error("Error deleting account:", accountDeleteError)
+    const { error } = await supabase.from("user_accounts").delete().eq("id", params.id).eq("user_id", session.user.id)
+
+    if (error) {
+      console.error("Error deleting account:", error)
       return NextResponse.json({ error: "Failed to delete account" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, message: "Account and associated emails deleted successfully" })
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

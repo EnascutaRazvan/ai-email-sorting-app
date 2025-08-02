@@ -2,64 +2,22 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { google } from "googleapis"
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-// Helper to refresh Google access token
-async function refreshGoogleAccessToken(refreshToken: string) {
-  try {
-    const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
-    oauth2Client.setCredentials({ refresh_token: refreshToken })
-    const { credentials } = await oauth2Client.refreshAccessToken()
-    return credentials.access_token
-  } catch (error) {
-    console.error("Error refreshing Google access token:", error)
-    return null
+interface GmailMessage {
+  id: string
+  threadId: string
+  labelIds: string[]
+  snippet: string
+  payload: {
+    headers: Array<{ name: string; value: string }>
+    body?: { data?: string }
+    parts?: Array<{ body?: { data?: string }; mimeType?: string }>
   }
-}
-
-// Function to categorize email content using AI
-async function categorizeEmailWithAI(emailContent: string, userId: string): Promise<string | null> {
-  try {
-    // Fetch user's custom categories
-    const { data: userCategories, error: categoriesError } = await supabase
-      .from("categories")
-      .select("id, name")
-      .eq("user_id", userId)
-
-    if (categoriesError) {
-      console.error("Error fetching user categories for AI:", categoriesError)
-      return null
-    }
-
-    const categoryNames = userCategories.map((cat) => cat.name).join(", ")
-    const uncategorizedId = userCategories.find((cat) => cat.name === "Uncategorized")?.id || null
-
-    const prompt = `Categorize the following email content into one of these categories: ${categoryNames}. If none of the categories fit, categorize it as "Uncategorized". Only respond with the category name.
-
-Email content:
----
-${emailContent}
----
-
-Category:`
-
-    const { text: categoryName } = await generateText({
-      model: groq("llama3-8b-8192"), // Using Groq's Llama 3 8B model
-      prompt: prompt,
-      temperature: 0, // Keep it deterministic for categorization
-    })
-
-    const foundCategory = userCategories.find((cat) => cat.name.toLowerCase() === categoryName.trim().toLowerCase())
-
-    return foundCategory ? foundCategory.id : uncategorizedId
-  } catch (error) {
-    console.error("Error categorizing email with AI:", error)
-    return null
-  }
+  internalDate: string
 }
 
 export async function POST(request: NextRequest) {
@@ -70,140 +28,286 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { accountId, maxResults = 50 } = await request.json()
+    const { accountId, isScheduled = false } = await request.json()
 
     if (!accountId) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
     }
 
-    // Fetch account details
+    // Get the account details
     const { data: account, error: accountError } = await supabase
       .from("user_accounts")
-      .select("access_token, refresh_token, expires_at, email")
+      .select("*")
       .eq("id", accountId)
       .eq("user_id", session.user.id)
       .single()
 
     if (accountError || !account) {
-      console.error("Error fetching account:", accountError)
-      return NextResponse.json({ error: "Account not found or unauthorized" }, { status: 404 })
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    let currentAccessToken = account.access_token
-    // Check if token is expired or about to expire (e.g., within 5 minutes)
-    const expiresAtDate = new Date(account.expires_at)
-    if (expiresAtDate.getTime() < Date.now() + 5 * 60 * 1000) {
-      console.log(`Refreshing token for account: ${account.email}`)
-      const newAccessToken = await refreshGoogleAccessToken(account.refresh_token!)
-      if (newAccessToken) {
-        currentAccessToken = newAccessToken
-        // Update the access token in Supabase
-        await supabase
-          .from("user_accounts")
-          .update({ access_token: newAccessToken, expires_at: new Date(Date.now() + 3600 * 1000).toISOString() }) // Assuming 1 hour validity
-          .eq("id", accountId)
-      } else {
-        console.error(`Failed to refresh token for account: ${account.email}. Skipping import.`)
-        return NextResponse.json({ error: "Failed to refresh access token" }, { status: 500 })
-      }
+    // Get user categories for AI categorization
+    const { data: categories, error: categoriesError } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("user_id", session.user.id)
+
+    if (categoriesError) {
+      console.error("Error fetching categories:", categoriesError)
+      return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })
     }
 
-    const oauth2Client = new google.auth.OAuth2()
-    oauth2Client.setCredentials({ access_token: currentAccessToken })
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client })
+    // Determine the date range for fetching emails
+    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled)
 
-    const listResponse = await gmail.users.messages.list({
-      userId: "me",
-      maxResults: maxResults,
-    })
+    // Fetch emails from Gmail API with date filtering
+    const gmailQuery = `in:inbox -in:sent ${dateQuery}`
+    const gmailResponse = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(gmailQuery)}&maxResults=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${account.access_token}`,
+        },
+      },
+    )
 
-    const messages = listResponse.data.messages || []
-    const importedEmails = []
+    if (!gmailResponse.ok) {
+      console.error("Gmail API error:", await gmailResponse.text())
+      return NextResponse.json({ error: "Failed to fetch emails from Gmail" }, { status: 500 })
+    }
 
-    for (const msg of messages) {
+    const gmailData = await gmailResponse.json()
+    const messageIds = gmailData.messages || []
+
+    let importedCount = 0
+    let processedCount = 0
+
+    for (const messageRef of messageIds) {
       try {
-        const getResponse = await gmail.users.messages.get({
-          userId: "me",
-          id: msg.id!,
-          format: "full",
-        })
-        const emailData = getResponse.data
+        processedCount++
 
-        const headers = emailData.payload?.headers || []
-        const subject = headers.find((h) => h.name === "Subject")?.value || "No Subject"
-        const senderHeader = headers.find((h) => h.name === "From")?.value || "Unknown Sender"
-        const senderMatch = senderHeader.match(/^(.*?) <(.*?)>$/)
-        const sender = senderMatch ? senderMatch[1].trim() : senderHeader.split("<")[0].trim()
-        const senderEmail = senderMatch
-          ? senderMatch[2]
-          : senderHeader.includes("<")
-            ? senderHeader.split("<")[1].replace(">", "")
-            : senderHeader.trim()
-        const dateHeader = headers.find((h) => h.name === "Date")?.value
-        const receivedAt = dateHeader ? new Date(dateHeader).toISOString() : new Date().toISOString()
-        const snippet = emailData.snippet || ""
-        const isRead = !emailData.labelIds?.includes("UNREAD")
+        // Check if email already exists
+        const { data: existingEmail } = await supabase.from("emails").select("id").eq("id", messageRef.id).single()
 
-        // Extract body content (plain text or HTML)
-        let bodyContent = ""
-        if (emailData.payload?.parts) {
-          const part = emailData.payload.parts.find((p) => p.mimeType === "text/plain" || p.mimeType === "text/html")
-          if (part?.body?.data) {
-            bodyContent = Buffer.from(part.body.data, "base64").toString("utf8")
-          }
-        } else if (emailData.payload?.body?.data) {
-          bodyContent = Buffer.from(emailData.payload.body.data, "base64").toString("utf8")
+        if (existingEmail) {
+          continue // Skip if already imported
         }
 
-        // Categorize with AI
-        const category_id = await categorizeEmailWithAI(
-          subject + " " + snippet + " " + bodyContent.substring(0, 500),
-          session.user.id,
+        // Fetch full message details
+        const messageResponse = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageRef.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${account.access_token}`,
+            },
+          },
         )
 
-        const { data: insertedEmail, error: insertError } = await supabase
-          .from("emails")
-          .upsert(
-            {
-              id: emailData.id!,
-              user_id: session.user.id,
-              account_id: accountId,
-              thread_id: emailData.threadId!,
-              subject,
-              sender,
-              sender_email: senderEmail,
-              snippet,
-              received_at: receivedAt,
-              is_read: isRead,
-              category_id: category_id,
-              full_content: bodyContent, // Store full content
-            },
-            { onConflict: "id" },
-          )
-          .select()
-          .single()
+        if (!messageResponse.ok) {
+          console.error(`Failed to fetch message ${messageRef.id}`)
+          continue
+        }
+
+        const message: GmailMessage = await messageResponse.json()
+
+        // Extract email details
+        const headers = message.payload.headers
+        const subject = headers.find((h) => h.name === "Subject")?.value || "No Subject"
+        const from = headers.find((h) => h.name === "From")?.value || "Unknown Sender"
+        const date = new Date(Number.parseInt(message.internalDate))
+
+        // Extract email body
+        const emailBody = extractEmailBody(message.payload)
+
+        // Generate AI summary using Groq
+        const aiSummary = await generateEmailSummary(subject, from, emailBody)
+
+        // Categorize email with AI using Groq
+        const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
+
+        // Store email in database
+        const { error: insertError } = await supabase.from("emails").insert({
+          id: message.id,
+          user_id: session.user.id,
+          account_id: accountId,
+          category_id: categoryId,
+          subject,
+          sender: from,
+          snippet: message.snippet,
+          ai_summary: aiSummary,
+          received_at: date.toISOString(),
+          is_read: !message.labelIds.includes("UNREAD"),
+          gmail_thread_id: message.threadId,
+          email_body: emailBody,
+        })
 
         if (insertError) {
-          console.error(`Error upserting email ${emailData.id}:`, insertError)
-        } else if (insertedEmail) {
-          importedEmails.push(insertedEmail)
+          console.error("Error inserting email:", insertError)
+          continue
         }
-      } catch (emailFetchError) {
-        console.error(`Error fetching or processing email ${msg.id}:`, emailFetchError)
+
+        // Archive email in Gmail
+        await archiveEmailInGmail(message.id, account.access_token)
+
+        importedCount++
+      } catch (error) {
+        console.error(`Error processing message ${messageRef.id}:`, error)
+        continue
       }
     }
 
-    // Update last_sync_history_id for the account after initial import
-    if (listResponse.data.historyId) {
-      await supabase
-        .from("user_accounts")
-        .update({ last_sync_history_id: listResponse.data.historyId })
-        .eq("id", accountId)
+    // Update last sync time for the account
+    await supabase
+      .from("user_accounts")
+      .update({
+        last_sync: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", accountId)
+
+    return NextResponse.json({
+      success: true,
+      imported: importedCount,
+      processed: processedCount,
+      message: `Successfully imported ${importedCount} new emails out of ${processedCount} processed`,
+    })
+  } catch (error) {
+    console.error("Import error:", error)
+    return NextResponse.json({ error: "Failed to import emails" }, { status: 500 })
+  }
+}
+
+async function buildDateQuery(accountId: string, userId: string, isScheduled: boolean): Promise<string> {
+  try {
+    // Get the account's last sync time and creation time
+    const { data: account } = await supabase
+      .from("user_accounts")
+      .select("last_sync, created_at")
+      .eq("id", accountId)
+      .single()
+
+    if (!account) {
+      return "" // No date filter if account not found
     }
 
-    return NextResponse.json({ success: true, importedCount: importedEmails.length, importedEmails })
+    let afterDate: Date
+
+    if (isScheduled && account.last_sync) {
+      // For scheduled imports, get emails after last sync
+      afterDate = new Date(account.last_sync)
+    } else {
+      // For manual imports or first-time imports, get emails from account creation
+      afterDate = new Date(account.created_at)
+    }
+
+    // Format date for Gmail API (YYYY/MM/DD)
+    const formattedDate = afterDate.toISOString().split("T")[0].replace(/-/g, "/")
+
+    return `after:${formattedDate}`
   } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error building date query:", error)
+    return ""
+  }
+}
+
+function extractEmailBody(payload: any): string {
+  if (payload.parts) {
+    // Prefer HTML
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/html" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
+
+    // Fallback to plain text
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
+  }
+
+  if (payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8")
+  }
+
+  return "No content available"
+}
+
+async function generateEmailSummary(subject: string, from: string, body: string): Promise<string> {
+  try {
+    const { text } = await generateText({
+      model: groq("llama-3.1-8b-instant"),
+      prompt: `Summarize this email in 1-2 sentences. Focus on the main purpose and any action items.
+
+Subject: ${subject}
+From: ${from}
+Body: ${body.substring(0, 2000)}...
+
+Summary:`,
+      maxTokens: 100,
+    })
+
+    return text.trim()
+  } catch (error) {
+    console.error("Error generating summary:", error)
+    return "Unable to generate summary"
+  }
+}
+
+async function categorizeEmailWithAI(
+  subject: string,
+  from: string,
+  body: string,
+  categories: any[],
+): Promise<string | null> {
+  if (!categories.length) return null
+
+  try {
+    const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
+
+    const { text } = await generateText({
+      model: groq("llama-3.1-8b-instant"),
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
+
+Available Categories:
+${categoryList}
+
+Email to categorize:
+Subject: ${subject}
+From: ${from}
+Body: ${body.substring(0, 1000)}...
+
+Category:`,
+      maxTokens: 20,
+    })
+
+    const selectedCategory = categories.find(
+      (cat) =>
+        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
+        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
+    )
+
+    return selectedCategory?.id || null
+  } catch (error) {
+    console.error("Error categorizing email:", error)
+    return null
+  }
+}
+
+async function archiveEmailInGmail(messageId: string, accessToken: string): Promise<void> {
+  try {
+    await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        removeLabelIds: ["INBOX"],
+      }),
+    })
+  } catch (error) {
+    console.error("Error archiving email:", error)
   }
 }

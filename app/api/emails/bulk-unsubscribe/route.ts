@@ -16,62 +16,74 @@ export async function POST(request: NextRequest) {
 
     const { emailIds } = await request.json()
 
-    if (!Array.isArray(emailIds) || emailIds.length === 0) {
-      return NextResponse.json({ error: "Invalid or empty emailIds array" }, { status: 400 })
+    if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+      return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
     }
 
-    // Fetch emails with their full content to find unsubscribe links
-    const { data: emailsToUnsubscribe, error: fetchError } = await supabase
+    // Fetch email content for the selected emails
+    const { data: emails, error: fetchError } = await supabase
       .from("emails")
-      .select("id, subject, sender, full_content")
+      .select("id, email_body, snippet, sender, subject")
       .in("id", emailIds)
       .eq("user_id", session.user.id)
 
     if (fetchError) {
-      console.error("Error fetching emails for unsubscribe:", fetchError)
-      return NextResponse.json({ error: "Failed to fetch emails for unsubscribe" }, { status: 500 })
-    }
-
-    if (!emailsToUnsubscribe || emailsToUnsubscribe.length === 0) {
-      return NextResponse.json({ message: "No emails found to unsubscribe from." })
+      console.error("Error fetching emails:", fetchError)
+      return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
     }
 
     const unsubscribeAgent = new UnsubscribeAgent()
     const results = []
-    let totalProcessed = 0
-    let totalSuccessful = 0
+    let successfulUnsubscribes = 0
 
-    for (const email of emailsToUnsubscribe) {
-      totalProcessed++
+    // Process each email for unsubscribe
+    for (const email of emails) {
       try {
-        const unsubscribeResult = await unsubscribeAgent.processEmail(email.id, email.full_content || "")
+        const emailContent = email.email_body || email.snippet || ""
+        const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
+
         results.push({
           emailId: email.id,
           subject: email.subject,
           sender: email.sender,
           success: unsubscribeResult.success,
           summary: unsubscribeResult.summary,
-          details: unsubscribeResult.details,
+          details: unsubscribeResult.results,
         })
+
         if (unsubscribeResult.success) {
-          totalSuccessful++
-          // Optionally, delete the email from the database after successful unsubscribe
-          await supabase.from("emails").delete().eq("id", email.id)
+          successfulUnsubscribes++
+
+          // Mark email as processed/unsubscribed in database
+          await supabase
+            .from("emails")
+            .update({
+              ai_summary: `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim(),
+            })
+            .eq("id", email.id)
         }
-      } catch (error: any) {
-        console.error(`Error processing unsubscribe for email ${email.id}:`, error)
+
+        // Add delay between processing emails
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+      } catch (error) {
+        console.error(`Error processing email ${email.id}:`, error)
         results.push({
           emailId: email.id,
           subject: email.subject,
           sender: email.sender,
           success: false,
-          summary: `Failed to process unsubscribe: ${error.message}`,
+          summary: `Error: ${error.message}`,
           details: [],
         })
       }
     }
 
-    return NextResponse.json({ success: true, results, totalProcessed, totalSuccessful })
+    return NextResponse.json({
+      success: true,
+      processed: emails.length,
+      successful: successfulUnsubscribes,
+      results,
+    })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

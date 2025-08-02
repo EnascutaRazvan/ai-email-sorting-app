@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -13,52 +13,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { email, name, accessToken, refreshToken, expiresAt } = await request.json()
+    // Generate a secure state parameter
+    const state = Buffer.from(
+      JSON.stringify({
+        userId: session.user.id,
+        timestamp: Date.now(),
+        nonce: Math.random().toString(36).substring(2, 15),
+      }),
+    ).toString("base64url")
 
-    if (!email || !accessToken || !refreshToken || !expiresAt) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
+    // Build Google OAuth URL with all required parameters
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/connect-callback`,
+      response_type: "code",
+      scope: [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify",
+      ].join(" "),
+      access_type: "offline",
+      prompt: "consent select_account", // Force account selection and consent
+      state: state,
+      include_granted_scopes: "true", // Include previously granted scopes
+    })
 
-    // Check if an account with this email already exists for this user
-    const { data: existingAccount, error: fetchError } = await supabase
-      .from("user_accounts")
-      .select("id")
-      .eq("user_id", session.user.id)
-      .eq("email", email)
-      .single()
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 
-    if (fetchError && fetchError.code !== "PGRST116") {
-      // PGRST116 means no rows found
-      console.error("Error checking existing account:", fetchError)
-      return NextResponse.json({ error: "Database error" }, { status: 500 })
-    }
+    // Log the connection attempt for security monitoring
+    console.log(`OAuth connection initiated for user ${session.user.id} at ${new Date().toISOString()}`)
 
-    if (existingAccount) {
-      return NextResponse.json({ success: false, message: "Account already connected." }, { status: 409 })
-    }
-
-    const { data, error } = await supabase
-      .from("user_accounts")
-      .insert({
-        user_id: session.user.id,
-        email,
-        name: name || email,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: new Date(expiresAt * 1000).toISOString(), // Convert seconds to ISO string
-        provider: "google", // Assuming Google for now
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error connecting account:", error)
-      return NextResponse.json({ error: "Failed to connect account" }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, account: data })
+    return NextResponse.json({
+      authUrl,
+      state, // Return state for client-side verification if needed
+      scopes: ["Gmail Read Access", "Gmail Modify Access", "Profile Information"],
+    })
   } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error generating connect URL:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to generate authorization URL",
+        details: process.env.NODE_ENV === "development" ? error : undefined,
+      },
+      { status: 500 },
+    )
   }
 }
