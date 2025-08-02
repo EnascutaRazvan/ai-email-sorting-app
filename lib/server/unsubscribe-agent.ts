@@ -2,7 +2,7 @@
 
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
-import { chromium, Browser } from "playwright"
+import { chromium, Page, Browser } from "playwright" // ✔️ Playwright not puppeteer
 
 interface UnsubscribeLink {
   url: string

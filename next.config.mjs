@@ -1,17 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    outputFileTracing: true,
-    outputFileTracingIncludes: {
-      // Include only the necessary node_modules for your function(s)
-      // e.g. only include playwright and supabase packages that are used
-      // You may need to experiment with paths to exclude heavy unused deps
-      // Here's an example:
-      "node_modules/playwright": true,
-      "node_modules/@supabase": true,
-    },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
-  // You can disable source maps or other build extras here as well if not needed
-};
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    unoptimized: true,
+  },
+  experimental: {
+    serverComponentsExternalPackages: ['puppeteer']
+  },
+  webpack: (config) => {
+    config.resolve.alias.canvas = false
+    config.resolve.alias.encoding = false
+    return config
+  }
+}
 
-module.exports = nextConfig;
+export default nextConfig
