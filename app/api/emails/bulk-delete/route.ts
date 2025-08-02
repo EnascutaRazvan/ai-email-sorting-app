@@ -1,34 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "../auth/[...nextauth]/route"
+import { neon } from "@neondatabase/serverless"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { emailIds } = await request.json()
 
-    if (!Array.isArray(emailIds) || emailIds.length === 0) {
-      return NextResponse.json({ error: "Invalid or empty emailIds array" }, { status: 400 })
+    if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+      return NextResponse.json({ error: "Invalid email IDs" }, { status: 400 })
     }
 
-    const { error } = await supabase.from("emails").delete().in("id", emailIds).eq("user_id", session.user.id)
+    // Delete emails that belong to the user's accounts
+    const placeholders = emailIds.map((_, index) => `$${index + 2}`).join(",")
+    const result = await sql`
+      DELETE FROM emails 
+      WHERE id IN (${emailIds.join(",")})
+      AND account_id IN (
+        SELECT id FROM accounts WHERE user_email = ${session.user.email}
+      )
+    `
 
-    if (error) {
-      console.error("Error deleting emails:", error)
-      return NextResponse.json({ error: "Failed to delete emails" }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, message: `Successfully deleted ${emailIds.length} emails.` })
+    return NextResponse.json({
+      success: true,
+      deletedCount: result.length || emailIds.length,
+    })
   } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error deleting emails:", error)
+    return NextResponse.json({ error: "Failed to delete emails" }, { status: 500 })
   }
 }

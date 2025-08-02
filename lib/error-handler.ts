@@ -1,4 +1,4 @@
-import { toastManager, toast } from "./toast-manager"
+import { toastManager } from "./toast-manager"
 
 export interface ApiError {
   message: string
@@ -66,13 +66,4 @@ export function showErrorToast(error: any, context?: string) {
 
 export function showSuccessToast(title: string, description?: string) {
   return toastManager.success(title, description)
-}
-
-export function handleError(error: any, title = "Error", defaultMessage = "An unexpected error occurred.") {
-  console.error(title, error)
-  toast({
-    title: title,
-    description: error.message || defaultMessage,
-    variant: "destructive",
-  })
 }

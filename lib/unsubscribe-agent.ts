@@ -1,168 +1,305 @@
 import puppeteer from "puppeteer"
-import { JSDOM } from "jsdom"
+
+interface UnsubscribeLink {
+  url: string
+  text: string
+  method: string
+}
 
 interface UnsubscribeResult {
   success: boolean
+  method: string
+  error?: string
+  details?: string
+  screenshot?: string
+}
+
+interface EmailUnsubscribeResult {
+  emailId: string
+  subject: string
+  sender: string
+  success: boolean
   summary: string
-  details: string[]
-  screenshot?: string // Base64 encoded screenshot
+  details: Array<{
+    link: UnsubscribeLink
+    result: UnsubscribeResult
+  }>
 }
 
 export class UnsubscribeAgent {
   private browser: puppeteer.Browser | null = null
 
-  constructor() {
-    // Initialize browser if needed, or do it on demand
+  async initialize() {
+    this.browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--single-process",
+        "--disable-gpu",
+      ],
+    })
   }
 
-  private async getBrowser() {
-    if (!this.browser) {
-      this.browser = await puppeteer.launch({
-        headless: true, // Set to false for debugging UI
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      })
-    }
-    return this.browser
-  }
-
-  async closeBrowser() {
+  async close() {
     if (this.browser) {
       await this.browser.close()
       this.browser = null
     }
   }
 
-  private extractUnsubscribeLink(htmlContent: string): string | null {
-    const dom = new JSDOM(htmlContent)
-    const document = dom.window.document
+  private extractUnsubscribeLinks(emailContent: string): UnsubscribeLink[] {
+    const links: UnsubscribeLink[] = []
 
-    // Try to find a direct unsubscribe link
-    const unsubscribeLink = document.querySelector('a[href*="unsubscribe"], a[href*="optout"]') as HTMLAnchorElement
-    if (unsubscribeLink) {
-      return unsubscribeLink.href
-    }
+    // Common unsubscribe patterns
+    const patterns = [
+      /href=["']([^"']*unsubscribe[^"']*)["'][^>]*>([^<]*)/gi,
+      /href=["']([^"']*opt[_-]?out[^"']*)["'][^>]*>([^<]*)/gi,
+      /href=["']([^"']*remove[^"']*)["'][^>]*>([^<]*)/gi,
+      /href=["']([^"']*preferences[^"']*)["'][^>]*>([^<]*)/gi,
+    ]
 
-    // Look for list-unsubscribe header (common in email clients)
-    const listUnsubscribeHeader = document.querySelector('meta[http-equiv="List-Unsubscribe"]') as HTMLMetaElement
-    if (listUnsubscribeHeader) {
-      const content = listUnsubscribeHeader.content
-      const match = content.match(/<(https?:\/\/[^>]+)>/)
-      if (match) {
-        return match[1]
+    patterns.forEach((pattern) => {
+      let match
+      while ((match = pattern.exec(emailContent)) !== null) {
+        const url = match[1]
+        const text = match[2]?.trim() || "Unsubscribe"
+
+        if (url && !links.some((link) => link.url === url)) {
+          links.push({
+            url: url.startsWith("http") ? url : `https:${url}`,
+            text,
+            method: "GET",
+          })
+        }
+      }
+    })
+
+    // Look for List-Unsubscribe headers in email content
+    const listUnsubscribeMatch = emailContent.match(/List-Unsubscribe:\s*<([^>]+)>/i)
+    if (listUnsubscribeMatch) {
+      const url = listUnsubscribeMatch[1]
+      if (!links.some((link) => link.url === url)) {
+        links.push({
+          url,
+          text: "List-Unsubscribe",
+          method: url.startsWith("mailto:") ? "EMAIL" : "GET",
+        })
       }
     }
 
-    // Fallback: search for text "unsubscribe" in links
-    const links = document.querySelectorAll("a")
-    for (const link of Array.from(links)) {
-      if (
-        link.textContent?.toLowerCase().includes("unsubscribe") ||
-        link.textContent?.toLowerCase().includes("opt out")
-      ) {
-        return link.href
-      }
-    }
-
-    return null
+    return links
   }
 
-  async processEmail(emailId: string, emailFullContent: string): Promise<UnsubscribeResult> {
-    const details: string[] = []
-    let screenshot: string | undefined
+  private async attemptUnsubscribe(link: UnsubscribeLink): Promise<UnsubscribeResult> {
+    if (!this.browser) {
+      throw new Error("Browser not initialized")
+    }
+
+    const page = await this.browser.newPage()
 
     try {
-      const unsubscribeLink = this.extractUnsubscribeLink(emailFullContent)
-      if (!unsubscribeLink) {
-        details.push("No unsubscribe link found in email content.")
-        return { success: false, summary: "No unsubscribe link found.", details }
+      // Set user agent and viewport
+      await page.setUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      )
+      await page.setViewport({ width: 1280, height: 720 })
+
+      if (link.method === "EMAIL") {
+        return {
+          success: false,
+          method: "EMAIL",
+          error: "Email unsubscribe not supported",
+          details: "Mailto links require manual intervention",
+        }
       }
 
-      details.push(`Found unsubscribe link: ${unsubscribeLink}`)
+      // Navigate to the unsubscribe page with timeout and error handling
+      const navigationPromise = page.goto(link.url, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      })
 
-      const browser = await this.getBrowser()
-      const page = await browser.newPage()
-      await page.setViewport({ width: 1280, height: 800 })
+      // Race condition to handle potential page redirects or new windows
+      await Promise.race([navigationPromise, new Promise((resolve) => setTimeout(resolve, 5000))])
 
-      try {
-        await page.goto(unsubscribeLink, { waitUntil: "domcontentloaded", timeout: 30000 })
-        details.push(`Navigated to: ${page.url()}`)
+      // Wait a bit for content to load
+      await page.waitForTimeout(2000)
 
-        // Wait for a short period to allow dynamic content to load
-        await page.waitForTimeout(2000)
+      // Take a screenshot for debugging
+      const screenshot = await page.screenshot({
+        encoding: "base64",
+        fullPage: false,
+      })
 
-        // Check for common unsubscribe patterns
+      // Look for common unsubscribe elements
+      const unsubscribeSelectors = [
+        'button[type="submit"]:contains("unsubscribe")',
+        'input[type="submit"][value*="unsubscribe"]',
+        'a[href*="unsubscribe"]',
+        'button:contains("unsubscribe")',
+        'button:contains("remove")',
+        'button:contains("opt out")',
+        ".unsubscribe-button",
+        "#unsubscribe",
+        '[data-testid*="unsubscribe"]',
+      ]
+
+      let clicked = false
+      for (const selector of unsubscribeSelectors) {
+        try {
+          const element = await page.$(selector)
+          if (element) {
+            await element.click()
+            clicked = true
+            break
+          }
+        } catch (error) {
+          // Continue to next selector
+        }
+      }
+
+      if (!clicked) {
+        // Try to find any form and submit it
+        const forms = await page.$$("form")
+        if (forms.length > 0) {
+          const form = forms[0]
+          await form.evaluate((form: HTMLFormElement) => form.submit())
+          clicked = true
+        }
+      }
+
+      if (clicked) {
+        // Wait for potential redirect or confirmation
+        await page.waitForTimeout(3000)
+
+        const finalUrl = page.url()
         const pageContent = await page.content()
-        const dom = new JSDOM(pageContent)
-        const document = dom.window.document
 
-        // Attempt 1: Look for a simple "Unsubscribe" button or link
-        const unsubscribeButton = await page.$x(
-          "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'unsubscribe')] | //a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'unsubscribe')] | //input[contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'unsubscribe')]",
-        )
-        if (unsubscribeButton.length > 0) {
-          details.push("Found unsubscribe button/link. Clicking...")
-          await unsubscribeButton[0].click()
-          await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {
-            /* ignore navigation timeout */
-          })
-          details.push(`Clicked unsubscribe. Current URL: ${page.url()}`)
-          screenshot = (await page.screenshot({ encoding: "base64" })) as string
-          return { success: true, summary: "Successfully clicked unsubscribe button/link.", details, screenshot }
+        // Check for success indicators
+        const successIndicators = ["unsubscribed", "removed", "opt out", "successfully", "confirmation", "thank you"]
+
+        const hasSuccessIndicator = successIndicators.some((indicator) => pageContent.toLowerCase().includes(indicator))
+
+        return {
+          success: hasSuccessIndicator,
+          method: "FORM_SUBMIT",
+          details: `Clicked unsubscribe element. Final URL: ${finalUrl}`,
+          screenshot: `data:image/png;base64,${screenshot}`,
         }
-
-        // Attempt 2: Look for forms with "unsubscribe" or "opt-out" in action/name/id
-        const form = await page.$(
-          'form[action*="unsubscribe"], form[action*="optout"], form[id*="unsubscribe"], form[name*="unsubscribe"]',
-        )
-        if (form) {
-          details.push("Found a potential unsubscribe form.")
-          const emailInput = await form.$('input[type="email"], input[name*="email"], input[id*="email"]')
-          if (emailInput) {
-            details.push("Found email input. Attempting to fill with sender email (if available).")
-            // You might need to pass the sender's email to this function
-            // For now, we'll assume the form might not need it or it's pre-filled
-            // await emailInput.type(senderEmail); // Requires senderEmail to be passed
-          }
-
-          const submitButton = await form.$('button[type="submit"], input[type="submit"]')
-          if (submitButton) {
-            details.push("Found submit button. Clicking form...")
-            await submitButton.click()
-            await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {
-              /* ignore navigation timeout */
-            })
-            details.push(`Submitted form. Current URL: ${page.url()}`)
-            screenshot = (await page.screenshot({ encoding: "base64" })) as string
-            return { success: true, summary: "Successfully submitted unsubscribe form.", details, screenshot }
-          }
+      } else {
+        return {
+          success: false,
+          method: "MANUAL_REQUIRED",
+          error: "No unsubscribe button found",
+          details: "Page requires manual intervention",
+          screenshot: `data:image/png;base64,${screenshot}`,
         }
-
-        // Attempt 3: Check for confirmation messages on the page
-        const pageText = await page.evaluate(() => document.body.innerText)
-        if (
-          pageText.toLowerCase().includes("you have been unsubscribed") ||
-          pageText.toLowerCase().includes("successfully unsubscribed") ||
-          pageText.toLowerCase().includes("opted out") ||
-          pageText.toLowerCase().includes("subscription cancelled")
-        ) {
-          details.push("Found confirmation message on page.")
-          screenshot = (await page.screenshot({ encoding: "base64" })) as string
-          return { success: true, summary: "Unsubscribe confirmed by page text.", details, screenshot }
-        }
-
-        details.push("No clear unsubscribe action or confirmation found on the page.")
-        screenshot = (await page.screenshot({ encoding: "base64" })) as string
-        return { success: false, summary: "Could not confirm unsubscribe. Manual review needed.", details, screenshot }
-      } catch (pageError: any) {
-        details.push(`Error during page interaction: ${pageError.message}`)
-        screenshot = (await page.screenshot({ encoding: "base64" })) as string
-        return { success: false, summary: `Failed to process unsubscribe: ${pageError.message}`, details, screenshot }
-      } finally {
-        await page.close()
       }
     } catch (error: any) {
-      details.push(`General error: ${error.message}`)
-      return { success: false, summary: `An unexpected error occurred: ${error.message}`, details }
+      const screenshot = await page
+        .screenshot({
+          encoding: "base64",
+          fullPage: false,
+        })
+        .catch(() => null)
+
+      return {
+        success: false,
+        method: "ERROR",
+        error: error.message,
+        details: `Failed to process unsubscribe link: ${link.url}`,
+        screenshot: screenshot ? `data:image/png;base64,${screenshot}` : undefined,
+      }
+    } finally {
+      await page.close().catch(() => {})
+    }
+  }
+
+  async processEmail(
+    emailId: string,
+    subject: string,
+    sender: string,
+    content: string,
+  ): Promise<EmailUnsubscribeResult> {
+    const links = this.extractUnsubscribeLinks(content)
+    const results: Array<{ link: UnsubscribeLink; result: UnsubscribeResult }> = []
+
+    if (links.length === 0) {
+      return {
+        emailId,
+        subject,
+        sender,
+        success: false,
+        summary: "No unsubscribe links found",
+        details: [],
+      }
+    }
+
+    // Process each unsubscribe link
+    for (const link of links) {
+      try {
+        const result = await this.attemptUnsubscribe(link)
+        results.push({ link, result })
+
+        // If we successfully unsubscribed, we can stop
+        if (result.success) {
+          break
+        }
+      } catch (error: any) {
+        results.push({
+          link,
+          result: {
+            success: false,
+            method: "ERROR",
+            error: error.message,
+            details: "Failed to process unsubscribe link",
+          },
+        })
+      }
+    }
+
+    const hasSuccess = results.some((r) => r.result.success)
+    const summary = hasSuccess ? "Successfully unsubscribed" : `Failed to unsubscribe. Tried ${results.length} link(s).`
+
+    return {
+      emailId,
+      subject,
+      sender,
+      success: hasSuccess,
+      summary,
+      details: results,
+    }
+  }
+
+  async processEmails(emails: Array<{ id: string; subject: string; sender: string; content: string }>): Promise<{
+    results: EmailUnsubscribeResult[]
+    totalProcessed: number
+    totalSuccessful: number
+  }> {
+    const results: EmailUnsubscribeResult[] = []
+
+    try {
+      await this.initialize()
+
+      for (const email of emails) {
+        const result = await this.processEmail(email.id, email.subject, email.sender, email.content)
+        results.push(result)
+      }
+    } finally {
+      await this.close()
+    }
+
+    const totalSuccessful = results.filter((r) => r.success).length
+
+    return {
+      results,
+      totalProcessed: results.length,
+      totalSuccessful,
     }
   }
 }

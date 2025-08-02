@@ -1,32 +1,52 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { format, parseISO } from "date-fns"
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, Trash, Eye, EyeOff, Loader2, MailX } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  ArrowDownUp,
+  Mail,
+  Filter,
+  Trash,
+  RefreshCcw,
+  UnlinkIcon as Unsubscribe,
+  Bot,
+  ChevronDown,
+  Eye,
+} from "lucide-react"
 import { EmailDetailDialog } from "./email-detail-dialog"
-import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
 import { useToast } from "@/components/ui/use-toast"
-import { EmailImportButton } from "./email-import-button"
 import { EmailPagination } from "./email-pagination"
 import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format, parseISO } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Email {
   id: string
   subject: string
   sender: string
-  sender_email: string
-  snippet: string
-  received_at: string
+  date: string
   is_read: boolean
   category_id: string | null
-  account_id: string
-  full_content?: string
-  category: { id: string; name: string; color: string } | null
-  account: { email: string; name?: string } | null
+  category_name: string | null
+  category_color: string | null
+  account_email: string
+  is_ai_suggested?: boolean
 }
 
 interface Category {
@@ -35,161 +55,103 @@ interface Category {
   color: string
 }
 
-interface Account {
-  id: string
-  email: string
-  name?: string
-}
-
-interface EmailListProps {
-  selectedCategory: string | null
-  accounts: Account[]
-  categories: Category[]
-  onEmailDeleted: () => void
-  onEmailCategorized: () => void
-  onEmailsRecategorized: () => void
-  onEmailsUnsubscribed: () => void
+interface UnsubscribeResult {
+  emailId: string
+  subject: string
+  sender: string
+  success: boolean
+  summary: string
+  details: Array<{
+    link: { url: string; text: string; method: string }
+    result: {
+      success: boolean
+      method: string
+      error?: string
+      details?: string
+      screenshot?: string
+    }
+  }>
 }
 
 export function EmailList({
-  selectedCategory,
-  accounts,
+  initialEmails,
   categories,
+  accounts,
   onEmailDeleted,
   onEmailCategorized,
   onEmailsRecategorized,
   onEmailsUnsubscribed,
-}: EmailListProps) {
-  const [emails, setEmails] = useState<Email[]>([])
-  const [selectedEmails, setSelectedEmails] = useState<string[]>([])
-  const [openEmail, setOpenEmail] = useState<Email | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isRecategorizing, setIsRecategorizing] = useState(false)
-  const [isUnsubscribing, setIsUnsubscribing] = useState(false)
-  const [unsubscribeResults, setUnsubscribeResults] = useState<any[] | null>(null)
-  const [isUnsubscribeResultsDialogOpen, setIsUnsubscribeResultsDialogOpen] = useState(false)
-
+}: {
+  initialEmails: Email[]
+  categories: Category[]
+  accounts: { id: string; email: string }[]
+  onEmailDeleted: (emailIds: string[]) => void
+  onEmailCategorized: (emailId: string, categoryId: string | null) => void
+  onEmailsRecategorized: (updatedEmails: { id: string; category_id: string }[]) => void
+  onEmailsUnsubscribed: (unsubscribedEmailIds: string[]) => void
+}) {
+  const [emails, setEmails] = useState<Email[]>(initialEmails)
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string | "all">("all")
+  const [selectedAccount, setSelectedAccount] = useState<string | "all">("all")
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc") // 'desc' for newest first
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [emailsPerPage] = useState(10)
-  const [totalEmails, setTotalEmails] = useState(0)
-  const [filters, setFilters] = useState<EmailFiltersType>({
-    search: "",
-    categoryId: "all",
-    accountId: "all",
-    dateFrom: null,
-    dateTo: null,
-    sender: "",
-    isRead: "all",
-  })
-  const [sortBy, setSortBy] = useState("received_at")
-  const [sortOrder, setSortOrder] = useState("desc") // 'asc' or 'desc'
-
+  const [emailsPerPage, setEmailsPerPage] = useState(10)
   const { toast } = useToast()
+  const [isUnsubscribeResultsDialogOpen, setIsUnsubscribeResultsDialogOpen] = useState(false)
+  const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([])
+  const [totalProcessedUnsubscribes, setTotalProcessedUnsubscribes] = useState(0)
+  const [totalSuccessfulUnsubscribes, setTotalSuccessfulUnsubscribes] = useState(0)
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  const [isConfirmUnsubscribeOpen, setIsConfirmUnsubscribeOpen] = useState(false)
 
-  const fetchEmails = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const queryParams = new URLSearchParams()
-      queryParams.append("page", currentPage.toString())
-      queryParams.append("limit", emailsPerPage.toString())
-      queryParams.append("sortBy", sortBy)
-      queryParams.append("sortOrder", sortOrder)
-
-      if (selectedCategory && selectedCategory !== "all") {
-        queryParams.append("category", selectedCategory)
-      } else if (filters.categoryId && filters.categoryId !== "all") {
-        queryParams.append("category", filters.categoryId)
-      }
-
-      if (filters.accountId && filters.accountId !== "all") {
-        queryParams.append("account", filters.accountId)
-      }
-      if (filters.dateFrom) {
-        queryParams.append("dateFrom", filters.dateFrom.toISOString())
-      }
-      if (filters.dateTo) {
-        queryParams.append("dateTo", filters.dateTo.toISOString())
-      }
-      if (filters.sender) {
-        queryParams.append("sender", filters.sender)
-      }
-      if (filters.search) {
-        queryParams.append("search", filters.search)
-      }
-      if (filters.isRead !== "all") {
-        queryParams.append("isRead", String(filters.isRead))
-      }
-
-      const response = await fetch(`/api/emails?${queryParams.toString()}`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch emails")
-      }
-      const data = await response.json()
-      setEmails(data.emails || [])
-      setTotalEmails(data.totalCount || 0)
-      setSelectedEmails([]) // Clear selection on new fetch
-    } catch (error: any) {
-      console.error("Error fetching emails:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load emails.",
-        variant: "destructive",
-      })
-      setEmails([])
-      setTotalEmails(0)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [currentPage, emailsPerPage, selectedCategory, filters, sortBy, sortOrder, toast])
+  // Filter states
+  const [filterDateRange, setFilterDateRange] = useState<{ from?: Date; to?: Date }>({})
+  const [filterIsRead, setFilterIsRead] = useState<boolean | "all">("all")
+  const [filterHasAttachment, setFilterHasAttachment] = useState<boolean | "all">("all")
 
   useEffect(() => {
-    fetchEmails()
-  }, [fetchEmails])
-
-  const handleFilterChange = useCallback((newFilters: EmailFiltersType) => {
-    setFilters(newFilters)
-    setCurrentPage(1) // Reset to first page on filter change
-  }, [])
-
-  const handleSort = (column: string) => {
-    if (sortBy === column) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-    } else {
-      setSortBy(column)
-      setSortOrder("desc") // Default sort order for new column
-    }
-    setCurrentPage(1) // Reset to first page on sort change
-  }
+    setEmails(initialEmails)
+    setSelectedEmails(new Set()) // Clear selection when emails change
+  }, [initialEmails])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedEmails(emails.map((email) => email.id))
+      const allEmailIds = filteredEmails.map((email) => email.id)
+      setSelectedEmails(new Set(allEmailIds))
     } else {
-      setSelectedEmails([])
+      setSelectedEmails(new Set())
     }
   }
 
   const handleSelectEmail = (emailId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedEmails((prev) => [...prev, emailId])
-    } else {
-      setSelectedEmails((prev) => prev.filter((id) => id !== emailId))
-    }
+    setSelectedEmails((prev) => {
+      const newSelection = new Set(prev)
+      if (checked) {
+        newSelection.add(emailId)
+      } else {
+        newSelection.delete(emailId)
+      }
+      return newSelection
+    })
   }
 
-  const handleOpenEmail = (email: Email) => {
-    setOpenEmail(email)
+  const handleEmailClick = (email: Email) => {
+    setSelectedEmail(email)
+    setIsDetailDialogOpen(true)
   }
 
-  const handleCloseEmailDetail = () => {
-    setOpenEmail(null)
-    fetchEmails() // Refresh emails to update read status
+  const handleEmailDetailClose = () => {
+    setIsDetailDialogOpen(false)
+    setSelectedEmail(null)
   }
 
-  const handleCategorizeEmail = async (emailId: string, categoryId: string | null) => {
+  const handleCategorize = async (emailId: string, categoryId: string | null) => {
     try {
-      const response = await fetch(`/api/emails/${emailId}/content`, {
+      const response = await fetch(`/api/emails/${emailId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: categoryId }),
@@ -199,12 +161,12 @@ export function EmailList({
         throw new Error("Failed to categorize email")
       }
 
+      setEmails((prev) => prev.map((email) => (email.id === emailId ? { ...email, category_id: categoryId } : email)))
+      onEmailCategorized(emailId, categoryId)
       toast({
         title: "Email Categorized",
-        description: "The email has been successfully categorized.",
+        description: `Email moved to ${categories.find((c) => c.id === categoryId)?.name || "Uncategorized"}.`,
       })
-      setOpenEmail(null) // Close dialog after categorizing
-      onEmailCategorized() // Notify parent to refresh categories and email list
     } catch (error: any) {
       toast({
         title: "Error",
@@ -214,331 +176,497 @@ export function EmailList({
     }
   }
 
-  const handleBulkDelete = async () => {
-    if (selectedEmails.length === 0) {
-      toast({
-        title: "No Emails Selected",
-        description: "Please select emails to delete.",
-        variant: "info",
-      })
-      return
-    }
+  const handleDeleteSelected = async () => {
+    setIsConfirmDeleteOpen(false)
+    if (selectedEmails.size === 0) return
 
-    setIsDeleting(true)
     try {
       const response = await fetch("/api/emails/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds: selectedEmails }),
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to delete emails")
       }
 
+      const deletedIds = Array.from(selectedEmails)
+      setEmails((prev) => prev.filter((email) => !selectedEmails.has(email.id)))
+      onEmailDeleted(deletedIds)
+      setSelectedEmails(new Set())
       toast({
         title: "Emails Deleted",
-        description: `Successfully deleted ${selectedEmails.length} emails.`,
+        description: `${deletedIds.length} emails have been deleted.`,
       })
-      setSelectedEmails([])
-      onEmailDeleted() // Notify parent to refresh email list and categories
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to delete emails.",
         variant: "destructive",
       })
-    } finally {
-      setIsDeleting(false)
     }
   }
 
-  const handleBulkRecategorize = async () => {
-    if (selectedEmails.length === 0) {
-      toast({
-        title: "No Emails Selected",
-        description: "Please select emails to recategorize.",
-        variant: "info",
-      })
-      return
-    }
-
-    setIsRecategorizing(true)
-    toast({
-      title: "Recategorizing Emails",
-      description: "AI is analyzing and recategorizing selected emails. This may take a moment.",
-    })
+  const handleRecategorizeWithAI = async () => {
     try {
+      toast({
+        title: "Recategorizing Emails",
+        description: "AI is working to recategorize your emails. This may take a moment.",
+      })
+
       const response = await fetch("/api/emails/recategorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds: selectedEmails }),
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to recategorize emails")
+        throw new Error("Failed to recategorize emails with AI")
       }
 
-      const data = await response.json()
+      const { updatedEmails } = await response.json()
+      setEmails((prev) =>
+        prev.map((email) => {
+          const updated = updatedEmails.find((ue: { id: string }) => ue.id === email.id)
+          if (updated) {
+            const newCategory = categories.find((cat) => cat.id === updated.category_id)
+            return {
+              ...email,
+              category_id: updated.category_id,
+              category_name: newCategory?.name || null,
+              category_color: newCategory?.color || null,
+              is_ai_suggested: true, // Mark as AI suggested after recategorization
+            }
+          }
+          return email
+        }),
+      )
+      onEmailsRecategorized(updatedEmails)
+      setSelectedEmails(new Set())
       toast({
-        title: "Recategorization Complete",
-        description: `Successfully recategorized ${data.updatedEmails.length} emails.`,
+        title: "AI Recategorization Complete",
+        description: `${updatedEmails.length} emails have been recategorized by AI.`,
       })
-      setSelectedEmails([])
-      onEmailsRecategorized() // Notify parent to refresh email list and categories
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to recategorize emails.",
+        description: error.message || "Failed to recategorize emails with AI.",
         variant: "destructive",
       })
-    } finally {
-      setIsRecategorizing(false)
     }
   }
 
-  const handleBulkUnsubscribe = async () => {
-    if (selectedEmails.length === 0) {
-      toast({
-        title: "No Emails Selected",
-        description: "Please select emails to unsubscribe from.",
-        variant: "info",
-      })
-      return
-    }
+  const handleUnsubscribeSelected = async () => {
+    setIsConfirmUnsubscribeOpen(false)
+    if (selectedEmails.size === 0) return
 
-    setIsUnsubscribing(true)
     toast({
       title: "Unsubscribing from Emails",
-      description: "The unsubscribe agent is working. This may take some time.",
+      description: "The AI agent is working to unsubscribe from selected emails. This may take a while.",
     })
+
     try {
       const response = await fetch("/api/emails/bulk-unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds: selectedEmails }),
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to unsubscribe from emails")
+        throw new Error("Failed to unsubscribe from emails")
       }
 
-      const data = await response.json()
-      setUnsubscribeResults(data.results)
+      const { results, totalProcessed, totalSuccessful } = await response.json()
+      setUnsubscribeResults(results)
+      setTotalProcessedUnsubscribes(totalProcessed)
+      setTotalSuccessfulUnsubscribes(totalSuccessful)
       setIsUnsubscribeResultsDialogOpen(true)
+
+      // Remove successfully unsubscribed emails from the list
+      const unsubscribedEmailIds = results
+        .filter((r: UnsubscribeResult) => r.success)
+        .map((r: UnsubscribeResult) => r.emailId)
+      setEmails((prev) => prev.filter((email) => !unsubscribedEmailIds.includes(email.id)))
+      onEmailsUnsubscribed(unsubscribedEmailIds)
+      setSelectedEmails(new Set())
+
       toast({
         title: "Unsubscribe Process Complete",
-        description: `Processed ${data.totalProcessed} emails. ${data.totalSuccessful} successful unsubscribes.`,
+        description: `Processed ${totalProcessed} emails, ${totalSuccessful} successful unsubscribes.`,
       })
-      setSelectedEmails([])
-      onEmailsUnsubscribed() // Notify parent to refresh email list and categories
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to unsubscribe from emails.",
         variant: "destructive",
       })
-    } finally {
-      setIsUnsubscribing(false)
     }
   }
 
-  const getCategoryColor = (categoryId: string | null) => {
-    if (!categoryId) return "#9ca3af" // Default gray for uncategorized
-    return categories.find((c) => c.id === categoryId)?.color || "#9ca3af"
-  }
+  const filteredEmails = useMemo(() => {
+    let filtered = emails || []
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (email) =>
+          email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          email.sender.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    // Category filter
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter((email) => email.category_id === selectedCategory)
+    }
+
+    // Account filter
+    if (selectedAccount !== "all") {
+      filtered = filtered.filter((email) => email.account_email === selectedAccount)
+    }
+
+    // Date range filter
+    if (filterDateRange.from || filterDateRange.to) {
+      filtered = filtered.filter((email) => {
+        const emailDate = parseISO(email.date)
+        if (filterDateRange.from && emailDate < filterDateRange.from) {
+          return false
+        }
+        if (filterDateRange.to && emailDate > filterDateRange.to) {
+          return false
+        }
+        return true
+      })
+    }
+
+    // Is Read filter
+    if (filterIsRead !== "all") {
+      filtered = filtered.filter((email) => email.is_read === filterIsRead)
+    }
+
+    // Has Attachment filter (assuming emails have an `has_attachment` property, which is not in the current Email interface)
+    // For now, this filter will not do anything unless `has_attachment` is added to the Email type and data.
+    // if (filterHasAttachment !== "all") {
+    //   filtered = filtered.filter((email) => email.has_attachment === filterHasAttachment);
+    // }
+
+    // Sort
+    if (filtered && filtered.length > 0) {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.date).getTime()
+        const dateB = new Date(b.date).getTime()
+        return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+      })
+    }
+
+    return filtered
+  }, [
+    emails,
+    searchTerm,
+    selectedCategory,
+    selectedAccount,
+    sortOrder,
+    filterDateRange,
+    filterIsRead,
+    filterHasAttachment,
+  ])
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredEmails.length / emailsPerPage)
+  const paginatedEmails = useMemo(() => {
+    const startIndex = (currentPage - 1) * emailsPerPage
+    const endIndex = startIndex + emailsPerPage
+    return filteredEmails.slice(startIndex, endIndex)
+  }, [filteredEmails, currentPage, emailsPerPage])
+
+  useEffect(() => {
+    // Reset to first page if filters change
+    setCurrentPage(1)
+  }, [searchTerm, selectedCategory, selectedAccount, filterDateRange, filterIsRead, filterHasAttachment])
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page)
+  }, [])
+
+  const handleEmailsPerPageChange = useCallback((value: string) => {
+    setEmailsPerPage(Number(value))
+    setCurrentPage(1) // Reset to first page when items per page changes
+  }, [])
 
   const getCategoryName = (categoryId: string | null) => {
     if (!categoryId) return "Uncategorized"
-    return categories.find((c) => c.id === categoryId)?.name || "Unknown"
+    return categories.find((c) => c.id === categoryId)?.name || "Unknown Category"
   }
 
-  const getAccountEmail = (accountId: string) => {
-    return accounts.find((a) => a.id === accountId)?.email || "Unknown Account"
+  const getCategoryColor = (categoryId: string | null) => {
+    if (!categoryId) return "bg-gray-200 text-gray-800" // Default for Uncategorized
+    return categories.find((c) => c.id === categoryId)?.color || "bg-gray-200 text-gray-800"
   }
-
-  const sortedEmails = useMemo(() => {
-    if (!emails || emails.length === 0) return []
-
-    // The sorting is now handled by the API, so we just return the emails as is.
-    // This memoization is still useful to prevent unnecessary re-renders if `emails` array reference doesn't change.
-    return emails
-  }, [emails])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Emails</h2>
-        <div className="flex gap-2">
-          <EmailImportButton accounts={accounts} onImportComplete={fetchEmails} />
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b bg-background">
+        <div className="flex items-center space-x-2">
+          <Input
+            placeholder="Search emails..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+                <Filter className="h-4 w-4" />
+                Filters
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 p-2">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Category</h4>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Account</h4>
+                  <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Accounts</SelectItem>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.email}>
+                          {account.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Date Range</h4>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        {filterDateRange.from ? (
+                          filterDateRange.to ? (
+                            <>
+                              {format(filterDateRange.from, "LLL dd, y")} - {format(filterDateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(filterDateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="range"
+                        selected={filterDateRange}
+                        onSelect={setFilterDateRange}
+                        numberOfMonths={2}
+                      />
+                      <div className="p-2 flex justify-end">
+                        <Button variant="ghost" onClick={() => setFilterDateRange({})}>
+                          Clear
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Read Status</h4>
+                  <Select
+                    value={String(filterIsRead)}
+                    onValueChange={(val) => setFilterIsRead(val === "true" ? true : val === "false" ? false : "all")}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="false">Unread</SelectItem>
+                      <SelectItem value="true">Read</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="flex items-center space-x-2">
+          {selectedEmails.size > 0 && (
+            <>
+              <Button variant="outline" onClick={() => setIsConfirmDeleteOpen(true)}>
+                <Trash className="h-4 w-4 mr-2" />
+                Delete ({selectedEmails.size})
+              </Button>
+              <Button variant="outline" onClick={() => setIsConfirmUnsubscribeOpen(true)}>
+                <Unsubscribe className="h-4 w-4 mr-2" />
+                Unsubscribe ({selectedEmails.size})
+              </Button>
+              <Button variant="outline" onClick={handleRecategorizeWithAI}>
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Recategorize with AI ({selectedEmails.size})
+              </Button>
+            </>
+          )}
+          <Button variant="ghost" size="icon" onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}>
+            <ArrowDownUp className="h-4 w-4" />
+            <span className="sr-only">Sort by Date</span>
+          </Button>
         </div>
       </div>
 
-      <EmailFilters
-        onFiltersChange={handleFilterChange}
-        accounts={accounts}
-        categories={categories}
-        onRecategorize={handleBulkRecategorize}
-        isRecategorizing={isRecategorizing}
-      />
-
-      {selectedEmails.length > 0 && (
-        <div className="flex items-center gap-2 rounded-md bg-primary/10 p-3 text-sm">
-          <span>{selectedEmails.length} emails selected.</span>
-          <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isDeleting}>
-            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash className="mr-2 h-4 w-4" />}
-            {isDeleting ? "Deleting..." : "Delete Selected"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleBulkUnsubscribe} disabled={isUnsubscribing}>
-            {isUnsubscribing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MailX className="mr-2 h-4 w-4" />}
-            {isUnsubscribing ? "Unsubscribing..." : "Unsubscribe Selected"}
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[50px]">
+      <div className="flex-1 overflow-y-auto">
+        {paginatedEmails.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">No emails found matching your criteria.</div>
+        ) : (
+          <div className="divide-y">
+            {paginatedEmails.map((email) => (
+              <div
+                key={email.id}
+                className="flex items-center gap-4 p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+              >
                 <Checkbox
-                  checked={selectedEmails.length === emails.length && emails.length > 0}
-                  onCheckedChange={handleSelectAll}
-                  aria-label="Select all emails"
+                  checked={selectedEmails.has(email.id)}
+                  onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
                 />
-              </TableHead>
-              <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("is_read")}>
-                Status
-                {sortBy === "is_read" &&
-                  (sortOrder === "asc" ? (
-                    <ArrowUpNarrowWide className="ml-1 inline h-4 w-4" />
-                  ) : (
-                    <ArrowDownNarrowWide className="ml-1 inline h-4 w-4" />
-                  ))}
-              </TableHead>
-              <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("subject")}>
-                Subject
-                {sortBy === "subject" &&
-                  (sortOrder === "asc" ? (
-                    <ArrowUpNarrowWide className="ml-1 inline h-4 w-4" />
-                  ) : (
-                    <ArrowDownNarrowWide className="ml-1 inline h-4 w-4" />
-                  ))}
-              </TableHead>
-              <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("sender")}>
-                Sender
-                {sortBy === "sender" &&
-                  (sortOrder === "asc" ? (
-                    <ArrowUpNarrowWide className="ml-1 inline h-4 w-4" />
-                  ) : (
-                    <ArrowDownNarrowWide className="ml-1 inline h-4 w-4" />
-                  ))}
-              </TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("received_at")}>
-                Date
-                {sortBy === "received_at" &&
-                  (sortOrder === "asc" ? (
-                    <ArrowUpNarrowWide className="ml-1 inline h-4 w-4" />
-                  ) : (
-                    <ArrowDownNarrowWide className="ml-1 inline h-4 w-4" />
-                  ))}
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                  <p className="mt-2">Loading emails...</p>
-                </TableCell>
-              </TableRow>
-            ) : emails.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                  No emails found matching your criteria.
-                </TableCell>
-              </TableRow>
-            ) : (
-              sortedEmails.map((email) => (
-                <TableRow
-                  key={email.id}
-                  data-state={selectedEmails.includes(email.id) && "selected"}
-                  className={!email.is_read ? "font-semibold bg-muted/20" : ""}
-                >
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedEmails.includes(email.id)}
-                      onCheckedChange={(checked) => handleSelectEmail(email.id, !!checked)}
-                      aria-label={`Select email from ${email.sender}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {email.is_read ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" title="Read" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-primary" title="Unread" />
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="cursor-pointer font-medium hover:underline"
-                    onClick={() =>
-                      handleOpenEmail({
-                        ...email,
-                        date: email.received_at,
-                        account_email: getAccountEmail(email.account_id),
-                      })
-                    }
-                  >
-                    {email.subject}
-                  </TableCell>
-                  <TableCell>{email.sender}</TableCell>
-                  <TableCell>
+                <div className="flex-1 grid gap-1" onClick={() => handleEmailClick(email)}>
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium flex items-center gap-2">
+                      {email.sender}
+                      {email.is_ai_suggested && (
+                        <Badge variant="outline" className="text-xs px-2 py-0.5 border-dashed flex items-center gap-1">
+                          <Bot className="h-3 w-3" /> AI Suggested
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(email.date), "MMM dd, yyyy hh:mm a")}
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground line-clamp-1">{email.subject}</div>
+                  <div className="flex items-center gap-2 text-xs">
                     <Badge className="px-2 py-0.5" style={{ backgroundColor: getCategoryColor(email.category_id) }}>
                       {getCategoryName(email.category_id)}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
                     <Badge variant="secondary" className="px-2 py-0.5">
-                      {getAccountEmail(email.account_id)}
+                      {email.account_email}
                     </Badge>
-                  </TableCell>
-                  <TableCell>{format(parseISO(email.received_at), "MMM dd, yyyy")}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                    {email.is_read && (
+                      <Badge variant="outline" className="px-2 py-0.5">
+                        Read
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <ChevronDown className="h-4 w-4" />
+                      <span className="sr-only">More actions</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEmailClick(email)}>
+                      <Eye className="h-4 w-4 mr-2" /> View
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCategorize(email.id, null)}>
+                      <Mail className="h-4 w-4 mr-2" /> Mark Uncategorized
+                    </DropdownMenuItem>
+                    {categories.map((category) => (
+                      <DropdownMenuItem key={category.id} onClick={() => handleCategorize(email.id, category.id)}>
+                        <span
+                          className="inline-block w-2 h-2 rounded-full mr-2"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        Categorize as {category.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <EmailPagination
         currentPage={currentPage}
-        totalEmails={totalEmails}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
         emailsPerPage={emailsPerPage}
-        onPageChange={setCurrentPage}
+        onEmailsPerPageChange={handleEmailsPerPageChange}
+        totalEmails={filteredEmails.length}
       />
 
-      {openEmail && (
+      {selectedEmail && (
         <EmailDetailDialog
-          isOpen={!!openEmail}
-          onClose={handleCloseEmailDetail}
-          email={openEmail}
-          onCategorize={handleCategorizeEmail}
+          isOpen={isDetailDialogOpen}
+          onClose={handleEmailDetailClose}
+          email={selectedEmail}
+          onCategorize={handleCategorize}
           categories={categories}
         />
       )}
 
-      {unsubscribeResults && (
-        <UnsubscribeResultsDialog
-          isOpen={isUnsubscribeResultsDialogOpen}
-          onClose={() => setIsUnsubscribeResultsDialogOpen(false)}
-          results={unsubscribeResults}
-        />
-      )}
+      <UnsubscribeResultsDialog
+        isOpen={isUnsubscribeResultsDialogOpen}
+        onClose={() => setIsUnsubscribeResultsDialogOpen(false)}
+        results={unsubscribeResults}
+        totalProcessed={totalProcessedUnsubscribes}
+        totalSuccessful={totalSuccessfulUnsubscribes}
+      />
+
+      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedEmails.size} selected emails? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isConfirmUnsubscribeOpen} onOpenChange={setIsConfirmUnsubscribeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Unsubscribe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to attempt to unsubscribe from {selectedEmails.size} selected emails? The AI agent
+              will visit the unsubscribe links. This process may take some time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnsubscribeSelected}>Unsubscribe</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

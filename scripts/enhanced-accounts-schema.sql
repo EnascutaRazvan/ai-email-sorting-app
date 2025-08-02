@@ -3,8 +3,7 @@ ALTER TABLE user_accounts
 ADD COLUMN IF NOT EXISTS name TEXT,
 ADD COLUMN IF NOT EXISTS picture TEXT,
 ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS scope TEXT,
-ADD COLUMN last_sync_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ADD COLUMN IF NOT EXISTS scope TEXT;
 
 -- Add index for token expiration monitoring
 CREATE INDEX IF NOT EXISTS idx_user_accounts_token_expires 
@@ -28,7 +27,6 @@ SELECT
   ua.updated_at,
   ua.token_expires_at,
   ua.scope,
-  ua.last_sync_at,
   CASE 
     WHEN ua.token_expires_at IS NULL THEN 'never'
     WHEN ua.token_expires_at < NOW() THEN 'expired'
@@ -57,25 +55,3 @@ BEGIN
     AND ua.token_expires_at < NOW() + (hours_ahead || ' hours')::INTERVAL;
 END;
 $$ LANGUAGE plpgsql;
-
--- Update the RLS policy for user_accounts to allow updates on last_sync_at
-DROP POLICY IF EXISTS "Users can update their own accounts." ON user_accounts;
-CREATE POLICY "Users can update their own accounts." ON user_accounts FOR UPDATE USING (auth.uid() = user_id);
-
--- Add is_ai_suggested column to emails table if it doesn't exist
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='emails' AND column_name='is_ai_suggested') THEN
-        ALTER TABLE emails ADD COLUMN is_ai_suggested BOOLEAN DEFAULT FALSE;
-    END IF;
-END
-$$;
-
--- Add ai_summary column to emails table for future use (optional, for AI summarization)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='emails' AND column_name='ai_summary') THEN
-        ALTER TABLE emails ADD COLUMN ai_summary TEXT;
-    END IF;
-END
-$$;
