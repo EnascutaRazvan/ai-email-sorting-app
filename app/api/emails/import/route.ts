@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { accountId, isScheduled = false } = await request.json()
+    const { accountId, dateFrom, dateTo, isScheduled = false } = await request.json()
 
     if (!accountId) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
@@ -46,6 +46,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
+    // Ensure uncategorized category exists
+    const { data: uncategorizedId, error: uncategorizedError } = await supabase.rpc("ensure_uncategorized_category", {
+      p_user_id: session.user.id,
+    })
+
+    if (uncategorizedError) {
+      console.error("Error ensuring uncategorized category:", uncategorizedError)
+      return NextResponse.json({ error: "Failed to ensure uncategorized category" }, { status: 500 })
+    }
+
     // Get user categories for AI categorization
     const { data: categories, error: categoriesError } = await supabase
       .from("categories")
@@ -57,8 +67,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })
     }
 
-    // Determine the date range for fetching emails
-    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled)
+    // Build date query for Gmail API
+    const dateQuery = buildGmailDateQuery(dateFrom, dateTo, account, isScheduled)
 
     // Fetch emails from Gmail API with date filtering
     const gmailQuery = `in:inbox -in:sent ${dateQuery}`
@@ -116,34 +126,61 @@ export async function POST(request: NextRequest) {
         const from = headers.find((h) => h.name === "From")?.value || "Unknown Sender"
         const date = new Date(Number.parseInt(message.internalDate))
 
+        // Extract sender email
+        const senderEmail = extractSenderEmail(from)
+
         // Extract email body
         const emailBody = extractEmailBody(message.payload)
 
         // Generate AI summary using Groq
         const aiSummary = await generateEmailSummary(subject, from, emailBody)
 
-        // Categorize email with AI using Groq
-        const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
-
         // Store email in database
-        const { error: insertError } = await supabase.from("emails").insert({
-          id: message.id,
-          user_id: session.user.id,
-          account_id: accountId,
-          category_id: categoryId,
-          subject,
-          sender: from,
-          snippet: message.snippet,
-          ai_summary: aiSummary,
-          received_at: date.toISOString(),
-          is_read: !message.labelIds.includes("UNREAD"),
-          gmail_thread_id: message.threadId,
-          email_body: emailBody,
-        })
+        const { data: insertedEmail, error: insertError } = await supabase
+          .from("emails")
+          .insert({
+            id: message.id,
+            user_id: session.user.id,
+            account_id: accountId,
+            subject,
+            sender: from,
+            sender_email: senderEmail,
+            snippet: message.snippet,
+            ai_summary: aiSummary,
+            received_at: date.toISOString(),
+            is_read: !message.labelIds.includes("UNREAD"),
+            gmail_thread_id: message.threadId,
+            email_body: emailBody,
+          })
+          .select()
+          .single()
 
         if (insertError) {
           console.error("Error inserting email:", insertError)
           continue
+        }
+
+        // Categorize email with AI
+        const suggestedCategories = await categorizeEmailWithAI(subject, from, emailBody, categories || [])
+
+        // Add categories to email
+        if (suggestedCategories.length > 0) {
+          const categoryInserts = suggestedCategories.map((cat) => ({
+            email_id: message.id,
+            category_id: cat.categoryId,
+            is_ai_suggested: true,
+            confidence_score: cat.confidence,
+          }))
+
+          await supabase.from("email_categories").insert(categoryInserts)
+        } else {
+          // Add to uncategorized if no categories found
+          await supabase.from("email_categories").insert({
+            email_id: message.id,
+            category_id: uncategorizedId,
+            is_ai_suggested: false,
+            confidence_score: null,
+          })
         }
 
         // Archive email in Gmail
@@ -177,37 +214,37 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function buildDateQuery(accountId: string, userId: string, isScheduled: boolean): Promise<string> {
-  try {
-    // Get the account's last sync time and creation time
-    const { data: account } = await supabase
-      .from("user_accounts")
-      .select("last_sync, created_at")
-      .eq("id", accountId)
-      .single()
-
-    if (!account) {
-      return "" // No date filter if account not found
-    }
-
-    let afterDate: Date
-
-    if (isScheduled && account.last_sync) {
-      // For scheduled imports, get emails after last sync
-      afterDate = new Date(account.last_sync)
-    } else {
-      // For manual imports or first-time imports, get emails from account creation
-      afterDate = new Date(account.created_at)
-    }
-
-    // Format date for Gmail API (YYYY/MM/DD)
-    const formattedDate = afterDate.toISOString().split("T")[0].replace(/-/g, "/")
-
-    return `after:${formattedDate}`
-  } catch (error) {
-    console.error("Error building date query:", error)
-    return ""
+function buildGmailDateQuery(
+  dateFrom: string | null,
+  dateTo: string | null,
+  account: any,
+  isScheduled: boolean,
+): string {
+  if (dateFrom && dateTo) {
+    // Use provided date range
+    const fromDate = new Date(dateFrom).toISOString().split("T")[0].replace(/-/g, "/")
+    const toDate = new Date(dateTo).toISOString().split("T")[0].replace(/-/g, "/")
+    return `after:${fromDate} before:${toDate}`
   }
+
+  if (isScheduled && account.last_sync) {
+    // For scheduled imports, get emails after last sync
+    const afterDate = new Date(account.last_sync).toISOString().split("T")[0].replace(/-/g, "/")
+    return `after:${afterDate}`
+  }
+
+  if (!isScheduled) {
+    // For manual imports without date range, get emails from account creation
+    const afterDate = new Date(account.created_at).toISOString().split("T")[0].replace(/-/g, "/")
+    return `after:${afterDate}`
+  }
+
+  return ""
+}
+
+function extractSenderEmail(sender: string): string {
+  const match = sender.match(/<([^>]+)>/)
+  return match ? match[1] : sender
 }
 
 function extractEmailBody(payload: any): string {
@@ -255,15 +292,15 @@ async function categorizeEmailWithAI(
   from: string,
   body: string,
   categories: any[],
-): Promise<string | null> {
-  if (!categories.length) return null
+): Promise<Array<{ categoryId: string; confidence: number }>> {
+  if (!categories.length) return []
 
   try {
     const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
 
     const { text } = await generateText({
       model: groq("llama-3.1-8b-instant"),
-      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. You can suggest multiple categories if relevant. Respond with ONLY the category names separated by commas, nothing else.
 
 Available Categories:
 ${categoryList}
@@ -273,20 +310,35 @@ Subject: ${subject}
 From: ${from}
 Body: ${body.substring(0, 1000)}...
 
-Category:`,
-      maxTokens: 20,
+Categories:`,
+      maxTokens: 50,
     })
 
-    const selectedCategory = categories.find(
-      (cat) =>
-        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
-        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
-    )
+    const suggestedCategoryNames = text
+      .trim()
+      .split(",")
+      .map((name) => name.trim())
+    const results: Array<{ categoryId: string; confidence: number }> = []
 
-    return selectedCategory?.id || null
+    for (const categoryName of suggestedCategoryNames) {
+      const matchedCategory = categories.find(
+        (cat) =>
+          cat.name.toLowerCase().includes(categoryName.toLowerCase()) ||
+          categoryName.toLowerCase().includes(cat.name.toLowerCase()),
+      )
+
+      if (matchedCategory) {
+        results.push({
+          categoryId: matchedCategory.id,
+          confidence: 0.8, // Default confidence score
+        })
+      }
+    }
+
+    return results
   } catch (error) {
     console.error("Error categorizing email:", error)
-    return null
+    return []
   }
 }
 

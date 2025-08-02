@@ -12,8 +12,14 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Download, Mail, CheckCircle, Loader2, User, Clock, Zap } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Download, Mail, CheckCircle, Loader2, User, Clock, Zap, CalendarIcon, X } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 
 interface ConnectedAccount {
   id: string
@@ -33,24 +39,36 @@ interface EmailImportButtonProps {
 export function EmailImportButton({ accounts, onImportComplete }: EmailImportButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [importingAccounts, setImportingAccounts] = useState<Set<string>>(new Set())
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
 
-  const handleImportEmails = async (accountId: string, accountEmail: string) => {
+  const handleImportEmails = async (accountId: string, accountEmail: string, useCustomRange = false) => {
     setImportingAccounts((prev) => new Set(prev).add(accountId))
 
     try {
+      const requestBody: any = { accountId, isScheduled: false }
+
+      if (useCustomRange && dateFrom && dateTo) {
+        requestBody.dateFrom = dateFrom.toISOString()
+        requestBody.dateTo = dateTo.toISOString()
+      }
+
       const response = await fetch("/api/emails/import", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ accountId, isScheduled: false }),
+        body: JSON.stringify(requestBody),
       })
 
       if (response.ok) {
         const data = await response.json()
+        const dateRangeText =
+          useCustomRange && dateFrom && dateTo ? ` from ${format(dateFrom, "MMM d")} to ${format(dateTo, "MMM d")}` : ""
+
         showSuccessToast(
           "Emails Imported Successfully",
-          `Imported ${data.imported} new emails from ${accountEmail}. ${data.processed - data.imported} emails were already imported.`,
+          `Imported ${data.imported} new emails from ${accountEmail}${dateRangeText}. ${data.processed - data.imported} emails were already imported.`,
         )
         onImportComplete()
       } else {
@@ -69,10 +87,28 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
   }
 
   const handleImportAll = async () => {
-    const importPromises = accounts.map((account) => handleImportEmails(account.id, account.email))
-
+    const importPromises = accounts.map((account) => handleImportEmails(account.id, account.email, false))
     await Promise.all(importPromises)
     setIsOpen(false)
+  }
+
+  const handleImportWithDateRange = async (accountId: string, accountEmail: string) => {
+    if (!dateFrom || !dateTo) {
+      showErrorToast("Please select both start and end dates", "Date Range Required")
+      return
+    }
+
+    if (dateFrom > dateTo) {
+      showErrorToast("Start date must be before end date", "Invalid Date Range")
+      return
+    }
+
+    await handleImportEmails(accountId, accountEmail, true)
+  }
+
+  const clearDateRange = () => {
+    setDateFrom(undefined)
+    setDateTo(undefined)
   }
 
   const getLastSyncInfo = (account: ConnectedAccount) => {
@@ -122,9 +158,9 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
           Import Emails
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
-          <DialogTitle className="flex items-center text-lg">
+          <DialogTitle className="flex items-center text-lg text-gray-900">
             <Mail className="mr-2 h-5 w-5 text-green-600" />
             Import Emails from Gmail
           </DialogTitle>
@@ -134,16 +170,77 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {/* Auto-sync Notice */}
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="flex items-center mb-2">
               <Zap className="h-4 w-4 text-blue-600 mr-2" />
               <h4 className="text-sm font-medium text-blue-900">Smart Email Sync</h4>
             </div>
-            <p className="text-xs text-blue-800 mb-2">
-              Emails are automatically imported every 15 minutes. Manual import fetches emails since your last sync.
+            <p className="text-xs text-blue-800">
+              Emails are automatically imported every 15 minutes. Manual import fetches emails since your last sync or
+              within a custom date range.
             </p>
+          </div>
+
+          {/* Date Range Selection */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-gray-900">Custom Date Range (Optional)</h4>
+              {(dateFrom || dateTo) && (
+                <Button onClick={clearDateRange} variant="ghost" size="sm" className="h-6 text-xs">
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-600">From Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal text-sm",
+                        !dateFrom && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white">
+                    <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-gray-600">To Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal text-sm",
+                        !dateTo && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateTo ? format(dateTo, "MMM d, yyyy") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white">
+                    <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            {dateFrom && dateTo && (
+              <p className="text-xs text-gray-600 mt-2">
+                Will import emails from {format(dateFrom, "MMM d, yyyy")} to {format(dateTo, "MMM d, yyyy")}
+              </p>
+            )}
           </div>
 
           {/* Import All Button */}
@@ -169,11 +266,13 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
               ) : (
                 <>
                   <Download className="mr-2 h-4 w-4" />
-                  Import All
+                  Import All (Since Last Sync)
                 </>
               )}
             </Button>
           </div>
+
+          <Separator />
 
           {/* Individual Account Import */}
           <div className="space-y-3">
@@ -188,8 +287,8 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
                   key={account.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="h-8 w-8">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs">
                         {account.name ? (
@@ -206,37 +305,60 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 truncate">{account.email}</p>
                       {account.name && <p className="text-xs text-gray-600 truncate">{account.name}</p>}
-                      <div className="flex items-center mt-1">
-                        {account.is_primary && (
-                          <Badge className="bg-blue-100 text-blue-700 text-xs mr-2">Primary</Badge>
-                        )}
+                      <div className="flex items-center mt-1 space-x-2">
+                        {account.is_primary && <Badge className="bg-blue-100 text-blue-700 text-xs">Primary</Badge>}
                         <div className={`flex items-center text-xs ${syncInfo.color}`}>
                           <SyncIcon className="h-3 w-3 mr-1" />
-                          {syncInfo.text}
+                          {account.last_sync
+                            ? `Last synced on ${new Date(account.last_sync).toLocaleDateString()} at ${new Date(account.last_sync).toLocaleTimeString()}`
+                            : "Never synced"}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <Button
-                    onClick={() => handleImportEmails(account.id, account.email)}
-                    disabled={isImporting}
-                    variant="outline"
-                    size="sm"
-                    className="ml-2"
-                  >
-                    {isImporting ? (
-                      <>
-                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="mr-1 h-3 w-3" />
-                        Import
-                      </>
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    {dateFrom && dateTo && (
+                      <Button
+                        onClick={() => handleImportWithDateRange(account.id, account.email)}
+                        disabled={isImporting}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        {isImporting ? (
+                          <>
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            Importing...
+                          </>
+                        ) : (
+                          <>
+                            <CalendarIcon className="mr-1 h-3 w-3" />
+                            Date Range
+                          </>
+                        )}
+                      </Button>
                     )}
-                  </Button>
+                    <Button
+                      onClick={() => handleImportEmails(account.id, account.email, false)}
+                      disabled={isImporting}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                    >
+                      {isImporting ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-1 h-3 w-3" />
+                          Since Last Sync
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )
             })}
@@ -249,7 +371,7 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
               <div className="text-xs text-blue-800">
                 <p className="font-medium mb-1">What happens during import:</p>
                 <ul className="space-y-1">
-                  <li>• Fetches emails since your last sync or account creation</li>
+                  <li>• Fetches emails from the specified date range or since last sync</li>
                   <li>• AI automatically categorizes and summarizes each email</li>
                   <li>• Emails are archived in Gmail (not deleted)</li>
                   <li>• Duplicates are automatically skipped</li>
