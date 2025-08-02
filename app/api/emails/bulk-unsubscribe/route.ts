@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
 
     for (const email of emails) {
       try {
+        console.log(email.email_body);
         const emailContent = email.email_body || email.snippet || ""
         const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
 

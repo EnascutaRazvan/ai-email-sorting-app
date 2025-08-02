@@ -23,29 +23,36 @@ export class UnsubscribeAgent {
 
   async extractUnsubscribeLinks(emailContent: string): Promise<UnsubscribeLink[]> {
     try {
+      console.log("TREBUIE SA VAD COND", emailContent)
       const { text } = await generateText({
         model: this.model,
         prompt: `
-          Analyze this email content and extract all unsubscribe links. Look for:
-          - Links with text containing "unsubscribe", "opt out", "remove", "stop emails"
-          - Links in footers or at the end of emails
-          - mailto: links for unsubscribe
-          - Any other links that appear to be for unsubscribing
+You are an AI language model that helps identify unsubscribe links in emails written in any language.
 
-          Email content:
-          ${emailContent}
+First, detect the language of the email content.
+Then, extract all unsubscribe-related links based on common patterns and language understanding.
 
-          Return a JSON array of objects with this format:
-          [
-            {
-              "url": "the full URL",
-              "text": "the link text or surrounding context",
-              "method": "GET" or "POST" (guess based on context)
-            }
-          ]
+Look for:
+- Links with text or surrounding content indicating unsubscribe actions (e.g., "unsubscribe", "opt out", "stop emails", or their equivalents in other languages like "darse de baja", "désabonner", "dezabonare")
+- "mailto:" links with unsubscribe intent
+- Footer links or links placed at the end of the message
 
-          If no unsubscribe links are found, return an empty array.
-        `,
+Email content:
+${emailContent}
+
+Return a strict JSON array of objects like:
+[
+  {
+    "url": "full URL",
+    "text": "link text or description",
+    "method": "GET" or "POST"
+  }
+]
+
+If no unsubscribe links are found, return an empty array [].
+DO NOT return any explanation or formatting, only valid JSON.
+`,
+
       })
 
       try {
@@ -103,40 +110,39 @@ export class UnsubscribeAgent {
       const { text: analysisText } = await generateText({
         model: this.model,
         prompt: `
-          You are an AI agent helping to unsubscribe from an email list. 
-          
-          Page URL: ${link.url}
-          Page text content: ${pageText.substring(0, 2000)}
-          
-          Analyze this unsubscribe page and determine what actions need to be taken:
-          1. Is this a simple confirmation page that just needs a button click?
-          2. Does it require filling out a form?
-          3. Are there checkboxes or dropdowns to interact with?
-          4. Is there a CAPTCHA present?
-          5. Does it require email confirmation?
-          
-          Look for elements like:
-          - "Confirm unsubscribe" buttons
-          - "Unsubscribe" buttons
-          - Email input fields
-          - Reason dropdowns/checkboxes
-          - Submit buttons
-          
-          Respond with just a JSON object, without any other plain text, without formatting, backticks, just the JSON:
-          {
-            "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
-            "elements": [
-              {
-                "type": "button|input|select|checkbox",
-                "selector": "CSS selector or text to find element",
-                "action": "click|type|select",
-                "value": "value to enter if needed"
-              }
-            ],
-            "confidence": 0.0-1.0,
-            "message": "description of what was found and what needs to be done"
-          }
-        `,
+            You are an AI agent helping a user unsubscribe from an email list.
+
+            This unsubscribe page may be in any language. First, detect the language and interpret the page accordingly.
+
+            Page URL: ${link.url}
+
+            Here is the rendered HTML content (partial):
+            ${pageText.substring(pageText.length / 3)}
+
+            Your goal:
+            - Identify what needs to be done to complete the unsubscription.
+            - Support multilingual pages.
+            - Extract actionable elements (buttons, inputs, dropdowns).
+            - Identify if the user is already unsubscribed.
+
+            Return ONLY a single JSON object in this format, with no extra commentary or formatting:
+
+            {
+              "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
+              "elements": [
+                {
+                  "type": "button|input|select|checkbox",
+                  "selector": "CSS selector or description",
+                  "action": "click|type|select",
+                  "value": "value to use (optional)"
+                }
+              ],
+              "confidence": 0.0-1.0,
+              "message": "Short summary of what was found and what action is needed"
+            }
+
+            Make sure the JSON is syntactically correct. If you cannot determine what to do, return action "ERROR".
+`,
       })
 
       console.log(analysisText);
@@ -195,6 +201,8 @@ export class UnsubscribeAgent {
     summary: string
   }> {
     const links = await this.extractUnsubscribeLinks(emailContent)
+
+    console.log("LINKKKKKK", links);
     const results = []
     let successCount = 0
 
