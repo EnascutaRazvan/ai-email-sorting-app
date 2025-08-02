@@ -67,6 +67,7 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [isRecategorizing, setIsRecategorizing] = useState(false)
+  const [isSuggestingCategories, setIsSuggestingCategories] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -99,15 +100,19 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
       const { accountId } = event.detail
       // Filter out emails from the removed account
       setEmails((prevEmails) => prevEmails.filter((email) => email.account.id !== accountId))
-      // Reset pagination if needed
-      if (emails.length <= pagination.limit) {
-        setPagination((prev) => ({ ...prev, page: 1 }))
-      }
+      // Reset filters if the removed account was selected
+      setFilters((prevFilters) => ({
+        ...prevFilters,
+        accountId: prevFilters.accountId === accountId ? null : prevFilters.accountId,
+      }))
+      // Reset to first page and refetch
+      setPagination((prev) => ({ ...prev, page: 1 }))
+      fetchEmails()
     }
 
     window.addEventListener("accountRemoved", handleAccountRemoved as EventListener)
     return () => window.removeEventListener("accountRemoved", handleAccountRemoved as EventListener)
-  }, [emails.length, pagination.limit])
+  }, [])
 
   const fetchEmails = async () => {
     if (!session?.user?.id) return
@@ -173,6 +178,44 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
       showErrorToast(error, "AI Recategorization")
     } finally {
       setIsRecategorizing(false)
+    }
+  }
+
+  const handleSuggestCategories = async () => {
+    setIsSuggestingCategories(true)
+
+    try {
+      // Get uncategorized emails
+      const uncategorizedEmails = emails.filter(
+        (email) =>
+          email.categories.some((cat) => cat.name.toLowerCase() === "uncategorized") || email.categories.length === 0,
+      )
+
+      if (uncategorizedEmails.length === 0) {
+        showSuccessToast("No emails to categorize", "All emails already have appropriate categories")
+        return
+      }
+
+      const emailIds = uncategorizedEmails.map((email) => email.id)
+
+      const response = await fetch("/api/emails/suggest-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        showSuccessToast("AI Category Suggestions Complete", `Suggested categories for ${data.suggested} emails`)
+        fetchEmails()
+        onEmailsChange?.()
+      } else {
+        throw new Error("Failed to suggest categories")
+      }
+    } catch (error) {
+      showErrorToast(error, "AI Category Suggestions")
+    } finally {
+      setIsSuggestingCategories(false)
     }
   }
 
@@ -276,6 +319,16 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
             onRecategorize={handleRecategorizeEmails}
             isRecategorizing={isRecategorizing}
           />
+          <Button
+            onClick={handleSuggestCategories}
+            disabled={isSuggestingCategories}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 bg-transparent"
+          >
+            <Bot className="h-4 w-4" />
+            {isSuggestingCategories ? "Suggesting..." : "AI Suggest Categories"}
+          </Button>
         </CardHeader>
 
         <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
@@ -363,23 +416,30 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                                   key={category.id}
                                   variant="secondary"
                                   style={{
-                                    backgroundColor: `${category.color}15`,
+                                    backgroundColor: category.is_ai_suggested
+                                      ? `${category.color}10`
+                                      : `${category.color}15`,
                                     color: category.color,
-                                    borderColor: `${category.color}30`,
+                                    borderColor: category.is_ai_suggested
+                                      ? `${category.color}40`
+                                      : `${category.color}30`,
                                   }}
-                                  className={`text-xs border ${category.is_ai_suggested ? "border-dashed" : ""} flex items-center`}
+                                  className={`text-xs border ${category.is_ai_suggested ? "border-dashed" : ""} flex items-center max-w-fit`}
                                 >
                                   {category.is_ai_suggested && (
                                     <Tooltip>
                                       <TooltipTrigger>
-                                        <Bot className="h-3 w-3 mr-1" />
+                                        <Bot className="h-3 w-3 mr-1 flex-shrink-0" />
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>AI suggested category</p>
+                                        <p className="text-xs">AI suggested category</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
-                                  {category.name}
+                                  <span className="truncate">{category.name}</span>
+                                  {category.is_ai_suggested && (
+                                    <span className="text-xs opacity-70 ml-1 hidden sm:inline">by AI</span>
+                                  )}
                                 </Badge>
                               ))}
                             </div>

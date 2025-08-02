@@ -11,19 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import {
-  Mail,
-  CheckCircle,
-  Trash2,
-  AlertCircle,
-  Shield,
-  User,
-  Clock,
-  Zap,
-  ChevronDown,
-  Info,
-  Settings,
-} from "lucide-react"
+import { Mail, CheckCircle, Trash2, Shield, User, Clock, Zap, ChevronDown, Info, Settings } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
 import { EmailImportButton } from "./email-import-button"
@@ -222,37 +210,36 @@ export function ConnectedAccounts() {
     const now = new Date()
     const diffMinutes = Math.floor((now.getTime() - lastSync.getTime()) / (1000 * 60))
 
-    if (diffMinutes < 30) {
+    if (diffMinutes < 5) {
       return {
-        text: `Last synced on ${lastSync.toLocaleDateString()} at ${lastSync.toLocaleTimeString()}`,
+        text: `Synced ${Math.max(1, diffMinutes)} minute${diffMinutes === 1 ? "" : "s"} ago`,
         color: "text-green-600",
         bgColor: "bg-green-100",
         icon: CheckCircle,
       }
     } else if (diffMinutes < 60) {
       return {
-        text: `Last synced ${diffMinutes}m ago`,
+        text: `Synced ${diffMinutes} minutes ago`,
+        color: "text-green-600",
+        bgColor: "bg-green-100",
+        icon: CheckCircle,
+      }
+    } else if (diffMinutes < 1440) {
+      // Less than 24 hours
+      const diffHours = Math.floor(diffMinutes / 60)
+      return {
+        text: `Synced ${diffHours} hour${diffHours === 1 ? "" : "s"} ago`,
         color: "text-blue-600",
         bgColor: "bg-blue-100",
         icon: Clock,
       }
     } else {
-      const diffHours = Math.floor(diffMinutes / 60)
-      if (diffHours < 24) {
-        return {
-          text: `Last synced ${diffHours}h ago`,
-          color: "text-amber-600",
-          bgColor: "bg-amber-100",
-          icon: Clock,
-        }
-      } else {
-        const diffDays = Math.floor(diffHours / 24)
-        return {
-          text: `Last synced ${diffDays}d ago`,
-          color: "text-red-600",
-          bgColor: "bg-red-100",
-          icon: AlertCircle,
-        }
+      const diffDays = Math.floor(diffMinutes / 1440)
+      return {
+        text: `Synced ${diffDays} day${diffDays === 1 ? "" : "s"} ago`,
+        color: "text-amber-600",
+        bgColor: "bg-amber-100",
+        icon: Clock,
       }
     }
   }
@@ -444,7 +431,11 @@ export function ConnectedAccounts() {
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p className="text-xs max-w-xs">{syncInfo.text}</p>
+                              <p className="text-xs max-w-xs">
+                                {account.last_sync
+                                  ? `Last synced on ${new Date(account.last_sync).toLocaleDateString()} at ${new Date(account.last_sync).toLocaleTimeString()}`
+                                  : "This account has never been synced"}
+                              </p>
                             </TooltipContent>
                           </Tooltip>
                         </div>

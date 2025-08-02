@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
           const categoryInserts = suggestedCategories.map((cat) => ({
             email_id: message.id,
             category_id: cat.categoryId,
-            is_ai_suggested: true,
+            is_ai_suggested: cat.isAiSuggested,
             confidence_score: cat.confidence,
           }))
 
@@ -292,7 +292,7 @@ async function categorizeEmailWithAI(
   from: string,
   body: string,
   categories: any[],
-): Promise<Array<{ categoryId: string; confidence: number }>> {
+): Promise<Array<{ categoryId: string; confidence: number; isAiSuggested: boolean }>> {
   if (!categories.length) return []
 
   try {
@@ -300,7 +300,7 @@ async function categorizeEmailWithAI(
 
     const { text } = await generateText({
       model: groq("llama-3.1-8b-instant"),
-      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. You can suggest multiple categories if relevant. Respond with ONLY the category names separated by commas, nothing else.
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. If none fit well, respond with "UNCATEGORIZED". You can suggest up to 2 categories if relevant. Respond with ONLY the category names separated by commas, nothing else.
 
 Available Categories:
 ${categoryList}
@@ -318,7 +318,9 @@ Categories:`,
       .trim()
       .split(",")
       .map((name) => name.trim())
-    const results: Array<{ categoryId: string; confidence: number }> = []
+      .filter((name) => name && name !== "UNCATEGORIZED")
+
+    const results: Array<{ categoryId: string; confidence: number; isAiSuggested: boolean }> = []
 
     for (const categoryName of suggestedCategoryNames) {
       const matchedCategory = categories.find(
@@ -330,7 +332,8 @@ Categories:`,
       if (matchedCategory) {
         results.push({
           categoryId: matchedCategory.id,
-          confidence: 0.8, // Default confidence score
+          confidence: 0.85, // High confidence for matched categories
+          isAiSuggested: true,
         })
       }
     }

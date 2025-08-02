@@ -184,62 +184,75 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
           </div>
 
           {/* Date Range Selection */}
-          <div className="bg-gray-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-medium text-gray-900">Custom Date Range (Optional)</h4>
+              <div className="flex items-center">
+                <CalendarIcon className="h-4 w-4 text-blue-600 mr-2" />
+                <h4 className="text-sm font-medium text-blue-900">Custom Date Range</h4>
+              </div>
               {(dateFrom || dateTo) && (
-                <Button onClick={clearDateRange} variant="ghost" size="sm" className="h-6 text-xs">
+                <Button
+                  onClick={clearDateRange}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs text-blue-700 hover:text-blue-900"
+                >
                   <X className="h-3 w-3 mr-1" />
                   Clear
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-xs text-blue-800 mb-3">
+              Import emails from a specific time period. Leave empty to import since last sync.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-xs text-gray-600">From Date</Label>
+                <Label className="text-xs text-blue-700 font-medium">From Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal text-sm",
+                        "w-full justify-start text-left font-normal text-sm bg-white border-blue-200 hover:bg-blue-50",
                         !dateFrom && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Select date"}
+                      <CalendarIcon className="mr-2 h-4 w-4 text-blue-600" />
+                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Select start date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white">
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
                     <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
                   </PopoverContent>
                 </Popover>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-gray-600">To Date</Label>
+                <Label className="text-xs text-blue-700 font-medium">To Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        "w-full justify-start text-left font-normal text-sm",
+                        "w-full justify-start text-left font-normal text-sm bg-white border-blue-200 hover:bg-blue-50",
                         !dateTo && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateTo ? format(dateTo, "MMM d, yyyy") : "Select date"}
+                      <CalendarIcon className="mr-2 h-4 w-4 text-blue-600" />
+                      {dateTo ? format(dateTo, "MMM d, yyyy") : "Select end date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white">
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
                     <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus />
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
             {dateFrom && dateTo && (
-              <p className="text-xs text-gray-600 mt-2">
-                Will import emails from {format(dateFrom, "MMM d, yyyy")} to {format(dateTo, "MMM d, yyyy")}
-              </p>
+              <div className="mt-3 p-2 bg-blue-100 rounded-md">
+                <p className="text-xs text-blue-800 font-medium">
+                  📅 Will import emails from {format(dateFrom, "MMM d, yyyy")} to {format(dateTo, "MMM d, yyyy")}
+                </p>
+              </div>
             )}
           </div>
 

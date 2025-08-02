@@ -5,6 +5,39 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+const DEFAULT_CATEGORIES = [
+  {
+    name: "Personal",
+    description: "Personal emails from friends, family, and personal contacts",
+    color: "#10B981", // Green
+  },
+  {
+    name: "Work",
+    description: "Work-related emails, meetings, projects, and professional communications",
+    color: "#3B82F6", // Blue
+  },
+  {
+    name: "Shopping",
+    description: "E-commerce, orders, receipts, shipping notifications, and shopping-related emails",
+    color: "#F59E0B", // Amber
+  },
+  {
+    name: "Promotions",
+    description: "Marketing emails, deals, offers, discounts, and promotional content",
+    color: "#EF4444", // Red
+  },
+  {
+    name: "Social",
+    description: "Social media notifications, social platforms, and community updates",
+    color: "#8B5CF6", // Purple
+  },
+  {
+    name: "Newsletters",
+    description: "Newsletters, subscriptions, blogs, and informational content",
+    color: "#06B6D4", // Cyan
+  },
+]
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -27,37 +60,32 @@ export async function POST(request: NextRequest) {
 
     if (existingCategories && existingCategories.length > 0) {
       return NextResponse.json({
-        message: "User already has categories",
         created: false,
+        message: "User already has categories",
       })
     }
 
-    // Call the database function to create default categories
-    const { error: createError } = await supabase.rpc("create_default_categories", {
-      p_user_id: session.user.id,
-    })
+    // Create default categories
+    const categoriesToInsert = DEFAULT_CATEGORIES.map((category) => ({
+      ...category,
+      user_id: session.user.id,
+      is_default: true,
+    }))
 
-    if (createError) {
-      console.error("Error creating default categories:", createError)
+    const { data: createdCategories, error: insertError } = await supabase
+      .from("categories")
+      .insert(categoriesToInsert)
+      .select()
+
+    if (insertError) {
+      console.error("Error creating default categories:", insertError)
       return NextResponse.json({ error: "Failed to create default categories" }, { status: 500 })
     }
 
-    // Fetch the created categories
-    const { data: categories, error: fetchError } = await supabase
-      .from("categories")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("name")
-
-    if (fetchError) {
-      console.error("Error fetching created categories:", fetchError)
-      return NextResponse.json({ error: "Failed to fetch created categories" }, { status: 500 })
-    }
-
     return NextResponse.json({
-      success: true,
       created: true,
-      categories: categories || [],
+      categories: createdCategories,
+      message: `Created ${DEFAULT_CATEGORIES.length} default categories`,
     })
   } catch (error) {
     console.error("API error:", error)
