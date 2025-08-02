@@ -1,103 +1,138 @@
 "use client"
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { CheckCircle, XCircle, Mail, ExternalLink } from "lucide-react"
 
-interface UnsubscribeResult {
-  emailId: string
-  subject: string
-  sender: string
-  success: boolean
-  summary: string
-  details: Array<{
-    link: { url: string; text: string; method: string }
-    result: { success: boolean; method: string; error?: string; details?: string }
-  }>
-}
-
 interface UnsubscribeResultsDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  results: UnsubscribeResult[]
-  totalProcessed: number
-  totalSuccessful: number
+  results: {
+    processed: number
+    successful: number
+    results: Array<{
+      emailId: string
+      subject: string
+      sender: string
+      success: boolean
+      summary: string
+      details: Array<{
+        link: {
+          url: string
+          text: string
+          method: string
+          confidence: number
+          language: string
+        }
+        result: {
+          success: boolean
+          method: string
+          error?: string
+          details?: string
+          language?: string
+        }
+      }>
+    }>
+  }
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export function UnsubscribeResultsDialog({
-  isOpen,
-  onClose,
-  results,
-  totalProcessed,
-  totalSuccessful,
-}: UnsubscribeResultsDialogProps) {
+export function UnsubscribeResultsDialog({ results, open, onOpenChange }: UnsubscribeResultsDialogProps) {
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <Mail className="mr-2 h-5 w-5 text-blue-600" />
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
             Unsubscribe Results
           </DialogTitle>
-          <DialogDescription>
-            Processed {totalProcessed} emails, {totalSuccessful} successful unsubscribes
-          </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[60vh]">
-          <div className="space-y-4">
-            {results.map((result) => (
-              <div
-                key={result.emailId}
-                className={`p-4 rounded-lg border ${
-                  result.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 truncate">{result.subject}</h3>
-                    <p className="text-sm text-gray-600 truncate">From: {result.sender}</p>
+        <div className="space-y-4">
+          <div className="flex gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{results.processed} Processed</Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="default" className="bg-green-100 text-green-800">
+                {results.successful} Successful
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="destructive">{results.processed - results.successful} Failed</Badge>
+            </div>
+          </div>
+
+          <ScrollArea className="h-[500px] pr-4">
+            <div className="space-y-4">
+              {results.results.map((result) => (
+                <div key={result.emailId} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {result.success ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-600" />
+                        )}
+                        <span className="font-medium text-sm">{result.sender}</span>
+                      </div>
+                      <h4 className="text-sm font-medium text-gray-900 mb-1">{result.subject}</h4>
+                      <p className="text-xs text-gray-600">{result.summary}</p>
+                    </div>
                   </div>
-                  <Badge variant={result.success ? "default" : "destructive"} className="ml-2">
-                    {result.success ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                    {result.success ? "Success" : "Failed"}
-                  </Badge>
-                </div>
 
-                <p className="text-sm text-gray-700 mb-3">{result.summary}</p>
-
-                {result.details.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-medium text-gray-800 uppercase tracking-wide">
-                      Unsubscribe Links Processed:
-                    </h4>
-                    {result.details.map((detail, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-white/50 rounded border">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <ExternalLink className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-600 truncate">{detail.link.url}</span>
+                  {result.details && result.details.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <h5 className="text-xs font-medium text-gray-700">Unsubscribe Links Found:</h5>
+                      {result.details.map((detail, index) => (
+                        <div key={index} className="bg-gray-50 rounded p-2 text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {detail.link.method}
+                              </Badge>
+                              {detail.link.language && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {detail.link.language}
+                                </Badge>
+                              )}
+                              <span className="text-gray-600">
+                                Confidence: {Math.round(detail.link.confidence * 100)}%
+                              </span>
+                            </div>
+                            {detail.result.success ? (
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-red-600" />
+                            )}
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">Method: {detail.result.method}</p>
+                          <div className="flex items-center gap-2 mb-1">
+                            <ExternalLink className="h-3 w-3 text-gray-400" />
+                            <span className="text-gray-700 font-mono break-all">{detail.link.url}</span>
+                          </div>
+                          <div className="text-gray-600">
+                            <strong>Text:</strong> {detail.link.text}
+                          </div>
                           {detail.result.details && (
-                            <p className="text-xs text-gray-600 mt-1">{detail.result.details}</p>
+                            <div className="text-gray-600 mt-1">
+                              <strong>Result:</strong> {detail.result.details}
+                            </div>
                           )}
                           {detail.result.error && (
-                            <p className="text-xs text-red-600 mt-1">Error: {detail.result.error}</p>
+                            <div className="text-red-600 mt-1">
+                              <strong>Error:</strong> {detail.result.error}
+                            </div>
                           )}
                         </div>
-                        <Badge variant={detail.result.success ? "default" : "secondary"} className="text-xs">
-                          {detail.result.success ? "✓" : "✗"}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )
