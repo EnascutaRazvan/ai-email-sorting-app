@@ -1,59 +1,126 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "../../../auth/[...nextauth]/route"
+import { google } from "googleapis"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = createClient()
+  const { id: emailId } = params
+
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const emailId = params.id
-
-    // Get the email from database
-    const { data: email, error } = await supabase
+    // Fetch email details from your database
+    const { data: email, error: emailError } = await supabase
       .from("emails")
-      .select(`
-        *,
-        user_accounts!inner(email, name),
-        categories(name, color)
-      `)
+      .select("message_id, account_id, is_read")
       .eq("id", emailId)
       .eq("user_id", session.user.id)
       .single()
 
-    if (error || !email) {
+    if (emailError || !email) {
+      console.error("Error fetching email from DB:", emailError)
       return NextResponse.json({ error: "Email not found" }, { status: 404 })
     }
 
-    // Mark email as read
-    await supabase
-      .from("emails")
-      .update({ is_read: true, updated_at: new Date().toISOString() })
-      .eq("id", emailId)
+    // Fetch account details to get Gmail tokens
+    const { data: account, error: accountError } = await supabase
+      .from("accounts")
+      .select("access_token, refresh_token, expires_at, email")
+      .eq("id", email.account_id)
       .eq("user_id", session.user.id)
+      .single()
 
-    return NextResponse.json({
-      success: true,
-      email: {
-        id: email.id,
-        subject: email.subject,
-        sender: email.sender,
-        received_at: email.received_at,
-        ai_summary: email.ai_summary,
-        email_body: email.email_body,
-        is_read: true, // Update to read
-        category: email.categories,
-        account: email.user_accounts,
-      },
+    if (accountError || !account) {
+      console.error("Error fetching account from DB:", accountError)
+      return NextResponse.json({ error: "Account not found" }, { status: 404 })
+    }
+
+    const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+    oauth2Client.setCredentials({
+      access_token: account.access_token,
+      refresh_token: account.refresh_token,
+      expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
     })
-  } catch (error) {
+
+    // Refresh token if expired
+    if (oauth2Client.isTokenExpired()) {
+      const { credentials } = await oauth2Client.refreshAccessToken()
+      await supabase
+        .from("accounts")
+        .update({
+          access_token: credentials.access_token,
+          refresh_token: credentials.refresh_token,
+          expires_at: credentials.expiry_date ? Math.floor(credentials.expiry_date / 1000) : null,
+        })
+        .eq("id", email.account_id)
+      oauth2Client.setCredentials(credentials) // Update client with new tokens
+    }
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client })
+
+    // Fetch the full email content from Gmail
+    const gmailResponse = await gmail.users.messages.get({
+      userId: "me",
+      id: email.message_id,
+      format: "full",
+    })
+
+    const payload = gmailResponse.data.payload
+    let htmlContent = ""
+    let textContent = ""
+
+    const getPartContent = (part: any) => {
+      if (part.body && part.body.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf8")
+      }
+      return ""
+    }
+
+    const traverseParts = (parts: any[]) => {
+      for (const part of parts) {
+        if (part.mimeType === "text/html") {
+          htmlContent = getPartContent(part)
+        } else if (part.mimeType === "text/plain") {
+          textContent = getPartContent(part)
+        } else if (part.parts) {
+          traverseParts(part.parts)
+        }
+      }
+    }
+
+    if (payload?.parts) {
+      traverseParts(payload.parts)
+    } else if (payload?.body?.data) {
+      // Handle cases where content is directly in payload body
+      if (payload.mimeType === "text/html") {
+        htmlContent = getPartContent(payload)
+      } else if (payload.mimeType === "text/plain") {
+        textContent = getPartContent(payload)
+      }
+    }
+
+    // Mark email as read in Gmail if it was unread
+    if (!email.is_read) {
+      await gmail.users.messages.modify({
+        userId: "me",
+        id: email.message_id,
+        requestBody: {
+          removeLabelIds: ["UNREAD"],
+          addLabelIds: ["SEEN"],
+        },
+      })
+      // Update is_read status in your database
+      await supabase.from("emails").update({ is_read: true }).eq("id", emailId).eq("user_id", session.user.id)
+    }
+
+    return NextResponse.json({ htmlContent, textContent })
+  } catch (error: any) {
     console.error("Error fetching email content:", error)
-    return NextResponse.json({ error: "Failed to fetch email content" }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

@@ -1,92 +1,172 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "../../auth/[...nextauth]/route"
+import { google } from "googleapis"
 import { UnsubscribeAgent } from "@/lib/server/unsubscribe-agent"
 
-export const runtime = "nodejs"
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const supabase = createClient()
+  const { emailIds } = await request.json()
 
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
+  if (!Array.isArray(emailIds) || emailIds.length === 0) {
+    return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
+  }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const results = []
+  let processedCount = 0
+  let successfulUnsubscribes = 0
 
-    const { emailIds } = await request.json()
+  for (const emailId of emailIds) {
+    let emailSubject = "Unknown Subject"
+    let emailSender = "Unknown Sender"
+    try {
+      // 1. Fetch email details from your database
+      const { data: email, error: emailError } = await supabase
+        .from("emails")
+        .select("message_id, account_id, subject, sender")
+        .eq("id", emailId)
+        .eq("user_id", session.user.id)
+        .single()
 
-    if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
-      return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
-    }
-
-    const { data: emails, error: fetchError } = await supabase
-      .from("emails")
-      .select("id, email_body, snippet, sender, subject, ai_summary")
-      .in("id", emailIds)
-      .eq("user_id", session.user.id)
-
-    if (fetchError) {
-      console.error("Error fetching emails:", fetchError)
-      return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
-    }
-
-    // ✅ Dynamic import here prevents font parsing issues with Playwright
-    const { UnsubscribeAgent } = await import("@/lib/server/unsubscribe-agent")
-    const unsubscribeAgent = new UnsubscribeAgent()
-
-    const results = []
-    let successfulUnsubscribes = 0
-
-    for (const email of emails) {
-      try {
-        const emailContent = email.email_body || email.snippet || ""
-        const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
-
+      if (emailError || !email) {
         results.push({
-          emailId: email.id,
-          subject: email.subject,
-          sender: email.sender,
-          success: unsubscribeResult.success,
-          summary: unsubscribeResult.summary,
-          details: unsubscribeResult.results,
-        })
-
-        if (unsubscribeResult.success) {
-          successfulUnsubscribes++
-
-          await supabase
-            .from("emails")
-            .update({
-              ai_summary: `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim(),
-            })
-            .eq("id", email.id)
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-      } catch (error) {
-        console.error(`Error processing email ${email.id}:`, error)
-        results.push({
-          emailId: email.id,
-          subject: email.subject,
-          sender: email.sender,
+          emailId,
+          subject: emailSubject,
+          sender: emailSender,
           success: false,
-          summary: `Error: ${(error as Error).message}`,
+          summary: `Email not found or unauthorized: ${emailError?.message}`,
           details: [],
         })
+        continue
       }
-    }
 
-    return NextResponse.json({
-      success: true,
-      processed: emails.length,
-      successful: successfulUnsubscribes,
-      results,
-    })
-  } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+      emailSubject = email.subject
+      emailSender = email.sender
+      processedCount++
+
+      // 2. Fetch account details to get Gmail tokens
+      const { data: account, error: accountError } = await supabase
+        .from("accounts")
+        .select("access_token, refresh_token, expires_at, email")
+        .eq("id", email.account_id)
+        .eq("user_id", session.user.id)
+        .single()
+
+      if (accountError || !account) {
+        results.push({
+          emailId,
+          subject: emailSubject,
+          sender: emailSender,
+          success: false,
+          summary: `Account not found or unauthorized: ${accountError?.message}`,
+          details: [],
+        })
+        continue
+      }
+
+      const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
+      oauth2Client.setCredentials({
+        access_token: account.access_token,
+        refresh_token: account.refresh_token,
+        expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
+      })
+
+      // Refresh token if expired
+      if (oauth2Client.isTokenExpired()) {
+        const { credentials } = await oauth2Client.refreshAccessToken()
+        await supabase
+          .from("accounts")
+          .update({
+            access_token: credentials.access_token,
+            refresh_token: credentials.refresh_token,
+            expires_at: credentials.expiry_date ? Math.floor(credentials.expiry_date / 1000) : null,
+          })
+          .eq("id", email.account_id)
+        oauth2Client.setCredentials(credentials)
+      }
+
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client })
+
+      // 3. Fetch the full email content from Gmail
+      const gmailResponse = await gmail.users.messages.get({
+        userId: "me",
+        id: email.message_id,
+        format: "full",
+      })
+
+      const payload = gmailResponse.data.payload
+      let htmlContent = ""
+      let textContent = ""
+
+      const getPartContent = (part: any) => {
+        if (part.body && part.body.data) {
+          return Buffer.from(part.body.data, "base64").toString("utf8")
+        }
+        return ""
+      }
+
+      const traverseParts = (parts: any[]) => {
+        for (const part of parts) {
+          if (part.mimeType === "text/html") {
+            htmlContent = getPartContent(part)
+          } else if (part.mimeType === "text/plain") {
+            textContent = getPartContent(part)
+          } else if (part.parts) {
+            traverseParts(part.parts)
+          }
+        }
+      }
+
+      if (payload?.parts) {
+        traverseParts(payload.parts)
+      } else if (payload?.body?.data) {
+        if (payload.mimeType === "text/html") {
+          htmlContent = getPartContent(payload)
+        } else if (payload.mimeType === "text/plain") {
+          textContent = getPartContent(payload)
+        }
+      }
+
+      const unsubscribeAgent = new UnsubscribeAgent(gmail, account.email, email.message_id, email.subject, email.sender)
+      const unsubscribeResult = await unsubscribeAgent.attemptUnsubscribe(htmlContent, textContent)
+
+      if (unsubscribeResult.success) {
+        successfulUnsubscribes++
+        // Move email to trash after successful unsubscribe
+        await gmail.users.messages.trash({
+          userId: "me",
+          id: email.message_id,
+        })
+        // Optionally, delete from your DB as well
+        await supabase.from("emails").delete().eq("id", emailId)
+      }
+
+      results.push({
+        emailId,
+        subject: emailSubject,
+        sender: emailSender,
+        success: unsubscribeResult.success,
+        summary: unsubscribeResult.summary,
+        details: unsubscribeResult.details,
+      })
+    } catch (overallError: any) {
+      console.error(`Error processing unsubscribe for email ${emailId}:`, overallError)
+      results.push({
+        emailId,
+        subject: emailSubject,
+        sender: emailSender,
+        success: false,
+        summary: `An unexpected error occurred: ${overallError.message}`,
+        details: [],
+      })
+    }
   }
+
+  return NextResponse.json({ processed: processedCount, successful: successfulUnsubscribes, results })
 }

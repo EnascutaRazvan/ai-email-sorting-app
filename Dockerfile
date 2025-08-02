@@ -1,17 +1,23 @@
-# Use the official Playwright base image
-FROM mcr.microsoft.com/playwright:v1.54.2-jammy
+# Use the official Node.js 18 image as the base image
+FROM node:18-alpine
 
-# Set working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy everything
-COPY . .
+# Copy package.json and package-lock.json (or yarn.lock) to the working directory
+COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Expose port (for debugging or local dev)
+# Copy the rest of the application code to the working directory
+COPY . .
+
+# Build the Next.js application
+RUN npm run build
+
+# Expose the port the app runs on
 EXPOSE 3000
 
-# Run your app (adjust for Next.js or other framework)
-CMD ["npm", "run", "start"]
+# Command to run the application
+CMD ["npm", "start"]

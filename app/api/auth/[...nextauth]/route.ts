@@ -1,98 +1,90 @@
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
+import { SupabaseAdapter } from "@auth/supabase-adapter"
 import { createClient } from "@supabase/supabase-js"
-import type { NextAuthOptions } from "next-auth" // Import NextAuthOptions type
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  auth: {
+    persistSession: false,
+  },
+})
 
-export const authOptions: NextAuthOptions = {
-  // Export authOptions
+export const authOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope:
-            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify",
-          access_type: "offline",
           prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+          scope:
+            "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.insert https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/gmail.settings https://www.googleapis.com/auth/gmail.addons.current.message.readonly https://www.googleapis.com/auth/gmail.addons.current.message.metadata https://www.googleapis.com/auth/gmail.addons.current.message.action https://www.googleapis.com/auth/gmail.addons.current.action.compose",
         },
       },
     }),
   ],
+  adapter: SupabaseAdapter({
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  }),
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // console.log("signIn callback - user:", user) // Removed console.log
-      if (account?.provider === "google") {
-        try {
-          // Store user in Supabase
-          const { error: userError } = await supabase.from("users").upsert({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            updated_at: new Date().toISOString(),
-          })
-
-          if (userError) {
-            console.error("Error storing user:", userError)
-            return false
-          }
-
-          // Store account information
-          const { error: accountError } = await supabase.from("user_accounts").upsert(
-            {
-              user_id: user.id,
-              gmail_id: account.providerAccountId,
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              email: user.email,
-              is_primary: true,
-              updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "user_id,gmail_id",
-            },
-          )
-
-          if (accountError) {
-            console.error("Error storing account:", accountError)
-            return false
-          }
-
-          return true
-        } catch (error) {
-          console.error("Sign in error:", error)
-          return false
-        }
+    async session({ session, user }: { session: any; user: any }) {
+      if (session?.user) {
+        session.user.id = user.id
       }
-      return true
+      return session
     },
-    async jwt({ token, account, user }) {
+    async jwt({ token, user, account }: { token: any; user: any; account: any }) {
       if (account) {
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
+        token.idToken = account.id_token
+        token.provider = account.provider
+        token.expires_at = account.expires_at
       }
       if (user) {
         token.id = user.id
       }
-      // console.log("jwt callback - token:", token) // Removed console.log
       return token
     },
-    async session({ session, token }) {
-      session.accessToken = token.accessToken as string
-      session.user.id = token.id as string
-      // console.log("session callback - token:", token) // Removed console.log
-      // console.log("session callback - session:", session) // Removed console.log
-      return session
+  },
+  events: {
+    async signIn({ user, account, profile }: { user: any; account: any; profile: any }) {
+      if (account?.provider === "google") {
+        const { data, error } = await supabase.from("accounts").upsert(
+          {
+            user_id: user.id,
+            provider: account.provider,
+            provider_account_id: account.providerAccountId,
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expires_at: account.expires_at,
+            token_type: account.token_type,
+            scope: account.scope,
+            id_token: account.id_token,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          },
+          { onConflict: "provider_account_id" },
+        )
+
+        if (error) {
+          console.error("Error upserting account:", error)
+        }
+      }
     },
+  },
+  session: {
+    strategy: "jwt",
   },
   pages: {
     signIn: "/auth/signin",
   },
 }
 
-const handler = NextAuth(authOptions) // Pass authOptions to NextAuth
+const handler = NextAuth(authOptions)
 
 export { handler as GET, handler as POST }

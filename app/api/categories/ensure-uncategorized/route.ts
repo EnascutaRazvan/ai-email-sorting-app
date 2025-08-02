@@ -1,49 +1,55 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { authOptions } from "../../auth/[...nextauth]/route"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-export async function POST(request: NextRequest) {
+  const supabase = createClient()
+  const userId = session.user.id
+
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check if "Uncategorized" category exists
-    const { data: existingCategory } = await supabase
+    // Check if 'Uncategorized' category already exists for the user
+    const { data: existingCategory, error: fetchError } = await supabase
       .from("categories")
-      .select("*")
-      .eq("user_id", session.user.id)
+      .select("id")
+      .eq("user_id", userId)
       .eq("name", "Uncategorized")
       .single()
 
-    if (existingCategory) {
-      return NextResponse.json({ success: true, category: existingCategory })
+    if (fetchError && fetchError.code !== "PGRST116") {
+      // PGRST116 means no rows found, which is expected if it doesn't exist
+      console.error("Error checking for existing 'Uncategorized' category:", fetchError)
+      throw new Error("Database error checking category")
     }
 
-    // Create "Uncategorized" category
-    const { data: newCategory, error } = await supabase
+    if (existingCategory) {
+      return NextResponse.json({ message: "Uncategorized category already exists", categoryId: existingCategory.id })
+    }
+
+    // If not found, create it
+    const { data: newCategory, error: insertError } = await supabase
       .from("categories")
       .insert({
-        user_id: session.user.id,
+        user_id: userId,
         name: "Uncategorized",
-        description: "Emails that haven't been categorized yet",
-        color: "#6B7280",
+        color: "#9CA3AF", // Default gray color
       })
       .select()
       .single()
 
-    if (error) {
-      console.error("Error creating uncategorized category:", error)
-      return NextResponse.json({ error: "Failed to create category" }, { status: 500 })
+    if (insertError) {
+      console.error("Error creating 'Uncategorized' category:", insertError)
+      throw new Error("Database error creating category")
     }
 
-    return NextResponse.json({ success: true, category: newCategory })
-  } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Uncategorized category created", categoryId: newCategory.id })
+  } catch (error: any) {
+    console.error("Failed to ensure uncategorized category:", error.message)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
