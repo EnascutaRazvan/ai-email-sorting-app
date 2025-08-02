@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { UnsubscribeAgent } from "@/lib/unsubscribe-agent"
+import { UnsubscribeAgent } from "@/lib/server/unsubscribe-agent"
+
+export const runtime = "nodejs"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -20,10 +22,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
     }
 
-    // Fetch email content for the selected emails
     const { data: emails, error: fetchError } = await supabase
       .from("emails")
-      .select("id, email_body, snippet, sender, subject")
+      .select("id, email_body, snippet, sender, subject, ai_summary")
       .in("id", emailIds)
       .eq("user_id", session.user.id)
 
@@ -32,11 +33,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
     }
 
+    // ✅ Dynamic import here prevents font parsing issues with Playwright
+    const { UnsubscribeAgent } = await import("@/lib/server/unsubscribe-agent")
     const unsubscribeAgent = new UnsubscribeAgent()
+
     const results = []
     let successfulUnsubscribes = 0
 
-    // Process each email for unsubscribe
     for (const email of emails) {
       try {
         const emailContent = email.email_body || email.snippet || ""
@@ -54,7 +57,6 @@ export async function POST(request: NextRequest) {
         if (unsubscribeResult.success) {
           successfulUnsubscribes++
 
-          // Mark email as processed/unsubscribed in database
           await supabase
             .from("emails")
             .update({
@@ -63,7 +65,6 @@ export async function POST(request: NextRequest) {
             .eq("id", email.id)
         }
 
-        // Add delay between processing emails
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         console.error(`Error processing email ${email.id}:`, error)
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
           subject: email.subject,
           sender: email.sender,
           success: false,
-          summary: `Error: ${error.message}`,
+          summary: `Error: ${(error as Error).message}`,
           details: [],
         })
       }
