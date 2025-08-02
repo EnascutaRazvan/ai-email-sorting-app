@@ -1,270 +1,297 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { Button } from "@/components/ui/button"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Plus, Edit, Trash, Check, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Plus, Folder, Trash2, FolderOpen } from "lucide-react"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { useToast } from "@/components/ui/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Category {
   id: string
   name: string
-  description: string
   color: string
-  email_count: number
+  count?: number
 }
 
 interface CategoriesProps {
   selectedCategory: string | null
   onCategorySelect: (categoryId: string | null) => void
-  onCategoriesChange?: () => void
+  onCategoriesChange: () => void
+  categories: Category[]
 }
 
-export function Categories({ selectedCategory, onCategorySelect, onCategoriesChange }: CategoriesProps) {
-  const { data: session } = useSession()
-  const [categories, setCategories] = useState<Category[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [newCategory, setNewCategory] = useState({
-    name: "",
-    description: "",
-    color: "#3B82F6",
-  })
-
-  useEffect(() => {
-    fetchCategories()
-  }, [session])
-
-  const fetchCategories = async () => {
-    if (!session?.user?.id) return
-
-    try {
-      const response = await fetch("/api/categories")
-      if (response.ok) {
-        const data = await response.json()
-        setCategories(data.categories || [])
-        onCategoriesChange?.()
-      } else {
-        throw new Error("Failed to fetch categories")
-      }
-    } catch (error) {
-      showErrorToast(error, "Fetching Categories")
-    } finally {
-      setIsLoading(false)
-    }
-  }
+export function Categories({ selectedCategory, onCategorySelect, onCategoriesChange, categories }: CategoriesProps) {
+  const [newCategoryName, setNewCategoryName] = useState("")
+  const [newCategoryColor, setNewCategoryColor] = useState("#000000")
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName] = useState("")
+  const [editingCategoryColor, setEditingCategoryColor] = useState("")
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null)
+  const { toast } = useToast()
 
   const handleCreateCategory = async () => {
-    if (!newCategory.name.trim()) {
-      showErrorToast("Category name is required", "Create Category")
+    if (!newCategoryName.trim() || !newCategoryColor) {
+      toast({
+        title: "Error",
+        description: "Category name and color cannot be empty.",
+        variant: "destructive",
+      })
       return
     }
 
-    setIsCreating(true)
     try {
       const response = await fetch("/api/categories", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newCategory),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCategoryName, color: newCategoryColor }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setCategories([...categories, data.category])
-        setNewCategory({ name: "", description: "", color: "#3B82F6" })
-        setIsDialogOpen(false)
-        showSuccessToast("Category Created", `"${data.category.name}" has been created successfully`)
-        onCategoriesChange?.()
-      } else {
+      if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to create category")
       }
-    } catch (error) {
-      showErrorToast(error, "Creating Category")
-    } finally {
-      setIsCreating(false)
+
+      toast({
+        title: "Category Created",
+        description: `Category "${newCategoryName}" has been added.`,
+      })
+      setNewCategoryName("")
+      setNewCategoryColor("#000000")
+      onCategoriesChange()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create category.",
+        variant: "destructive",
+      })
     }
   }
 
-  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to delete "${categoryName}"? This action cannot be undone and will uncategorize all emails in this category.`,
-      )
-    ) {
+  const handleEditCategory = (category: Category) => {
+    setEditingCategoryId(category.id)
+    setEditingCategoryName(category.name)
+    setEditingCategoryColor(category.color)
+  }
+
+  const handleSaveCategory = async (categoryId: string) => {
+    if (!editingCategoryName.trim() || !editingCategoryColor) {
+      toast({
+        title: "Error",
+        description: "Category name and color cannot be empty.",
+        variant: "destructive",
+      })
       return
     }
 
     try {
       const response = await fetch(`/api/categories/${categoryId}`, {
-        method: "DELETE",
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingCategoryName, color: editingCategoryColor }),
       })
 
-      if (response.ok) {
-        setCategories(categories.filter((cat) => cat.id !== categoryId))
-        if (selectedCategory === categoryId) {
-          onCategorySelect(null)
-        }
-        showSuccessToast("Category Deleted", `"${categoryName}" has been deleted`)
-        onCategoriesChange?.()
-      } else {
+      if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to delete category")
+        throw new Error(errorData.error || "Failed to update category")
       }
-    } catch (error) {
-      showErrorToast(error, "Deleting Category")
+
+      toast({
+        title: "Category Updated",
+        description: `Category "${editingCategoryName}" has been updated.`,
+      })
+      setEditingCategoryId(null)
+      onCategoriesChange()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update category.",
+        variant: "destructive",
+      })
     }
   }
 
-  const getTotalEmailCount = () => {
-    return categories.reduce((sum, cat) => sum + cat.email_count, 0)
+  const handleCancelEdit = () => {
+    setEditingCategoryId(null)
+    setEditingCategoryName("")
+    setEditingCategoryColor("")
   }
 
-  if (isLoading) {
-    return (
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-900">Categories</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    )
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete) return
+
+    setIsConfirmDeleteOpen(false)
+
+    try {
+      const response = await fetch(`/api/categories/${categoryToDelete.id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete category")
+      }
+
+      toast({
+        title: "Category Deleted",
+        description: `Category "${categoryToDelete.name}" has been deleted. Emails are now uncategorized.`,
+      })
+      onCategoriesChange()
+      setCategoryToDelete(null)
+      if (selectedCategory === categoryToDelete.id) {
+        onCategorySelect(null) // Deselect if the deleted category was selected
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete category.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const openDeleteConfirm = (category: Category) => {
+    setCategoryToDelete(category)
+    setIsConfirmDeleteOpen(true)
+  }
+
+  const getCategoryCount = (categoryId: string | null) => {
+    if (categoryId === "uncategorized") {
+      // For "Uncategorized", we need to count emails with category_id IS NULL
+      const uncategorizedCount = categories.find((cat) => cat.name === "Uncategorized")?.count || 0
+      return uncategorizedCount
+    }
+    const category = categories.find((cat) => cat.id === categoryId)
+    return category?.count || 0
   }
 
   return (
-    <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-          <Folder className="mr-2 h-4 w-4 text-blue-600" />
-          Categories
-          <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
-            {categories.length}
-          </Badge>
-        </CardTitle>
+    <Card>
+      <CardHeader>
+        <CardTitle>Categories</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {/* <Button
-          onClick={() => onCategorySelect(null)}
-          variant={selectedCategory === null ? "default" : "ghost"}
+      <CardContent className="space-y-4">
+        {/* All Emails */}
+        <Button
+          variant={selectedCategory === null ? "secondary" : "ghost"}
           className="w-full justify-start"
-          size="sm"
+          onClick={() => onCategorySelect(null)}
         >
-          <FolderOpen className="mr-2 h-4 w-4" />
           All Emails
-          <Badge variant="secondary" className="ml-auto">
-            {getTotalEmailCount()}
-          </Badge>
-        </Button> */}
+          <span className="ml-auto text-sm text-muted-foreground">
+            {categories.reduce((sum, cat) => sum + (cat.count || 0), 0)}
+          </span>
+        </Button>
 
-        {categories.map((category) => (
-          <div key={category.id} className="group relative">
-            <Button
-              onClick={() => onCategorySelect(category.id)}
-              variant={selectedCategory === category.id ? "default" : "ghost"}
-              className="w-full justify-start pr-8"
-              size="sm"
-            >
-              <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
-              {category.name}
-              <Badge variant="secondary" className="ml-auto">
-                {category.email_count}
-              </Badge>
-            </Button>
-            <Button
-              onClick={() => handleDeleteCategory(category.id, category.name)}
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ))}
+        {/* Uncategorized */}
+        <Button
+          variant={selectedCategory === "uncategorized" ? "secondary" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => onCategorySelect("uncategorized")}
+        >
+          <div className="w-3 h-3 rounded-full bg-gray-400 mr-2" />
+          Uncategorized
+          <span className="ml-auto text-sm text-muted-foreground">{getCategoryCount("uncategorized")}</span>
+        </Button>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-transparent" size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Category
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-white">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900">Create New Category</DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Add a new category to organize your emails.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right text-gray-700">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  value={newCategory.name}
-                  onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                  className="col-span-3"
-                  placeholder="e.g., Work, Personal, Shopping"
-                />
+        <div className="space-y-2">
+          {categories
+            .filter((cat) => cat.name !== "Uncategorized") // Filter out "Uncategorized" from the main list
+            .map((category) => (
+              <div key={category.id} className="flex items-center justify-between group">
+                {editingCategoryId === category.id ? (
+                  <div className="flex items-center w-full gap-2">
+                    <Input
+                      value={editingCategoryName}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      className="flex-1"
+                    />
+                    <input
+                      type="color"
+                      value={editingCategoryColor}
+                      onChange={(e) => setEditingCategoryColor(e.target.value)}
+                      className="w-8 h-8 p-0 border-none cursor-pointer"
+                    />
+                    <Button size="icon" variant="ghost" onClick={() => handleSaveCategory(category.id)}>
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      variant={selectedCategory === category.id ? "secondary" : "ghost"}
+                      className="w-full justify-start"
+                      onClick={() => onCategorySelect(category.id)}
+                    >
+                      <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
+                      {category.name}
+                      <span className="ml-auto text-sm text-muted-foreground">{category.count || 0}</span>
+                    </Button>
+                    <div className="flex items-center ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button size="icon" variant="ghost" onClick={() => handleEditCategory(category)}>
+                        <Edit className="h-4 w-4" />
+                        <span className="sr-only">Edit category</span>
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => openDeleteConfirm(category)}>
+                        <Trash className="h-4 w-4" />
+                        <span className="sr-only">Delete category</span>
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right text-gray-700">
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  value={newCategory.description}
-                  onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
-                  className="col-span-3"
-                  placeholder="Describe what emails belong in this category"
-                  rows={3}
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="color" className="text-right text-gray-700">
-                  Color
-                </Label>
-                <Input
-                  id="color"
-                  type="color"
-                  value={newCategory.color}
-                  onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
-                  className="col-span-3 h-10"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreateCategory} disabled={isCreating}>
-                {isCreating ? "Creating..." : "Create Category"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            ))}
+        </div>
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="New category name"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            className="flex-1"
+          />
+          <input
+            type="color"
+            value={newCategoryColor}
+            onChange={(e) => setNewCategoryColor(e.target.value)}
+            className="w-8 h-8 p-0 border-none cursor-pointer"
+          />
+          <Button size="icon" onClick={handleCreateCategory}>
+            <Plus className="h-4 w-4" />
+            <span className="sr-only">Add category</span>
+          </Button>
+        </div>
       </CardContent>
+
+      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the category &quot;{categoryToDelete?.name}&quot;? All emails in this
+              category will become uncategorized. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCategory}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

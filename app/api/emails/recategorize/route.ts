@@ -7,118 +7,100 @@ import { groq } from "@ai-sdk/groq"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
+// Function to categorize email content using AI
+async function categorizeEmailWithAI(emailContent: string, userId: string): Promise<string | null> {
+  try {
+    // Fetch user's custom categories
+    const { data: userCategories, error: categoriesError } = await supabase
+      .from("categories")
+      .select("id, name")
+      .eq("user_id", userId)
+
+    if (categoriesError) {
+      console.error("Error fetching user categories for AI:", categoriesError)
+      return null
+    }
+
+    const categoryNames = userCategories.map((cat) => cat.name).join(", ")
+    const uncategorizedId = userCategories.find((cat) => cat.name === "Uncategorized")?.id || null
+
+    const prompt = `Categorize the following email content into one of these categories: ${categoryNames}. If none of the categories fit, categorize it as "Uncategorized". Only respond with the category name.
+
+Email content:
+---
+${emailContent}
+---
+
+Category:`
+
+    const { text: categoryName } = await generateText({
+      model: groq("llama3-8b-8192"), // Using Groq's Llama 3 8B model
+      prompt: prompt,
+      temperature: 0, // Keep it deterministic for categorization
+    })
+
+    const foundCategory = userCategories.find((cat) => cat.name.toLowerCase() === categoryName.trim().toLowerCase())
+
+    return foundCategory ? foundCategory.id : uncategorizedId
+  } catch (error) {
+    console.error("Error categorizing email with AI:", error)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { emailIds } = await request.json()
 
-    if (!emailIds || !Array.isArray(emailIds)) {
-      return NextResponse.json({ error: "Email IDs are required" }, { status: 400 })
+    if (!Array.isArray(emailIds) || emailIds.length === 0) {
+      return NextResponse.json({ error: "Invalid or empty emailIds array" }, { status: 400 })
     }
 
-    // Get user categories
-    const { data: categories } = await supabase.from("categories").select("*").eq("user_id", session.user.id)
+    const updatedEmails = []
 
-    if (!categories || categories.length === 0) {
-      return NextResponse.json({ error: "No categories found" }, { status: 400 })
-    }
+    for (const emailId of emailIds) {
+      // Fetch email content for AI categorization
+      const { data: email, error: fetchError } = await supabase
+        .from("emails")
+        .select("id, subject, snippet, full_content")
+        .eq("id", emailId)
+        .eq("user_id", session.user.id)
+        .single()
 
-    // Get emails to recategorize
-    const { data: emails } = await supabase
-      .from("emails")
-      .select("id, subject, sender, snippet, email_body")
-      .in("id", emailIds)
-      .eq("user_id", session.user.id)
+      if (fetchError || !email) {
+        console.error(`Error fetching email ${emailId} for recategorization:`, fetchError)
+        continue
+      }
 
-    if (!emails || emails.length === 0) {
-      return NextResponse.json({ error: "No emails found" }, { status: 404 })
-    }
+      const contentToCategorize = `${email.subject} ${email.snippet} ${email.full_content?.substring(0, 500) || ""}`
+      const newCategoryId = await categorizeEmailWithAI(contentToCategorize, session.user.id)
 
-    let updatedCount = 0
-    const suggestions = []
+      if (newCategoryId) {
+        const { data: updatedEmail, error: updateError } = await supabase
+          .from("emails")
+          .update({ category_id: newCategoryId, is_ai_suggested: true })
+          .eq("id", emailId)
+          .eq("user_id", session.user.id)
+          .select("id, category_id")
+          .single()
 
-    for (const email of emails) {
-      try {
-        const categoryId = await categorizeEmailWithAI(
-          email.subject,
-          email.sender,
-          email.email_body || email.snippet,
-          categories,
-        )
-
-        if (categoryId) {
-          const { error: updateError } = await supabase
-            .from("emails")
-            .update({ category_id: categoryId })
-            .eq("id", email.id)
-
-          if (!updateError) {
-            updatedCount++
-            const category = categories.find((c) => c.id === categoryId)
-            suggestions.push({
-              emailId: email.id,
-              categoryId,
-              categoryName: category?.name,
-              categoryColor: category?.color,
-            })
-          }
+        if (updateError) {
+          console.error(`Error updating category for email ${emailId}:`, updateError)
+        } else if (updatedEmail) {
+          updatedEmails.push(updatedEmail)
         }
-      } catch (error) {
-        console.error(`Error recategorizing email ${email.id}:`, error)
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      updated: updatedCount,
-      suggestions,
-    })
+    return NextResponse.json({ success: true, updatedEmails })
   } catch (error) {
-    console.error("Recategorization error:", error)
-    return NextResponse.json({ error: "Failed to recategorize emails" }, { status: 500 })
-  }
-}
-
-async function categorizeEmailWithAI(
-  subject: string,
-  sender: string,
-  body: string,
-  categories: any[],
-): Promise<string | null> {
-  if (!categories.length) return null
-
-  try {
-    const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
-
-    const { text } = await generateText({
-      model: groq("llama-3.1-8b-instant"),
-      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
-
-Available Categories:
-${categoryList}
-
-Email to categorize:
-Subject: ${subject}
-From: ${sender}
-Body: ${body.substring(0, 1000)}...
-
-Category:`,
-      maxTokens: 20,
-    })
-
-    const selectedCategory = categories.find(
-      (cat) =>
-        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
-        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
-    )
-
-    return selectedCategory?.id || null
-  } catch (error) {
-    console.error("Error categorizing email:", error)
-    return null
+    console.error("API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
