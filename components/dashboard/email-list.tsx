@@ -31,7 +31,6 @@ interface Email {
   account?: {
     email: string
     name?: string
-    disconnected?: boolean
   }
   suggested_category?: {
     id: string
@@ -102,6 +101,17 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
   useEffect(() => {
     fetchEmailsWithFilters()
   }, [filters])
+
+  // Listen for account removal events
+  useEffect(() => {
+    const handleAccountRemoved = () => {
+      fetchEmailsWithFilters()
+      onEmailsChange?.()
+    }
+
+    window.addEventListener("accountRemoved", handleAccountRemoved)
+    return () => window.removeEventListener("accountRemoved", handleAccountRemoved)
+  }, [])
 
   const fetchEmails = async () => {
     try {
@@ -393,7 +403,9 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No emails found</h3>
               <p className="text-sm text-gray-600 max-w-sm">
-                Try adjusting your filters or import emails from your connected Gmail accounts
+                {accounts.length === 0
+                  ? "Connect your Gmail accounts to start importing emails"
+                  : "Try adjusting your filters or import emails from your connected Gmail accounts"}
               </p>
             </div>
           ) : (
@@ -439,24 +451,12 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                             {email.account && (
                               <Tooltip>
                                 <TooltipTrigger>
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-xs border-gray-300 ${
-                                      email.account.disconnected
-                                        ? "bg-orange-50 text-orange-600 border-orange-300"
-                                        : "bg-gray-50 text-gray-600"
-                                    }`}
-                                  >
-                                    {email.account.disconnected && <span className="mr-1">⚠️</span>}
+                                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
                                     {email.account.email.split("@")[0]}
-                                    {email.account.disconnected && " (disconnected)"}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>
-                                    Account: {email.account.email}
-                                    {email.account.disconnected && " (This account has been disconnected)"}
-                                  </p>
+                                  <p>Account: {email.account.email}</p>
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -532,12 +532,7 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                         <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
                           <div className="flex items-center space-x-2">
                             <User className="h-3 w-3" />
-                            <span className="truncate">
-                              {email.account?.email || "Unknown account"}
-                              {email.account?.disconnected && (
-                                <span className="text-orange-600 ml-1">(disconnected)</span>
-                              )}
-                            </span>
+                            <span className="truncate">{email.account?.email || "Unknown account"}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}

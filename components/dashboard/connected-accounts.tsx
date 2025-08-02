@@ -2,143 +2,197 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Mail, Plus, Trash2, RefreshCw, CheckCircle, AlertCircle, Crown } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
+import { EmailImportButton } from "./email-import-button"
+import { cn } from "@/lib/utils"
 
-interface Account {
+interface ConnectedAccount {
   id: string
   email: string
   name?: string
+  picture?: string
   is_primary: boolean
-  sync_enabled: boolean
-  last_sync_at?: string
   created_at: string
+  token_expires_at?: string
+  scope?: string
+  last_sync?: string
+  users?: UserColumn
 }
 
-interface ConnectedAccountsProps {
-  onAccountsChange?: () => void
+interface UserColumn {
+  image?: string
 }
-
-export function ConnectedAccounts({ onAccountsChange }: ConnectedAccountsProps) {
+export function ConnectedAccounts() {
   const { data: session } = useSession()
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const searchParams = useSearchParams()
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isConnecting, setIsConnecting] = useState(false)
-  const [removingAccountId, setRemovingAccountId] = useState<string | null>(null)
-  const [showMultiAccountDialog, setShowMultiAccountDialog] = useState(false)
+  const [isInfoExpanded, setIsInfoExpanded] = useState(false)
 
   useEffect(() => {
-    if (session?.user?.id) {
-      fetchAccounts()
-    }
+    fetchConnectedAccounts()
   }, [session])
 
-  const fetchAccounts = async () => {
+  useEffect(() => {
+    // Handle URL params for success/error messages
+    const success = searchParams.get("success")
+    const error = searchParams.get("error")
+    const details = searchParams.get("details")
+
+    if (success === "account_connected") {
+      showSuccessToast("Account Connected", "New Gmail account has been successfully connected!")
+      fetchConnectedAccounts()
+    }
+
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        access_denied: "Access was denied. Please grant all required permissions to continue.",
+        missing_params: "Missing required parameters. Please try again.",
+        invalid_state: "Invalid security token. Please try again.",
+        token_exchange_failed: "Failed to exchange authorization code. Please try again.",
+        user_info_failed: "Failed to get user information from Google.",
+        invalid_user_info: "Invalid user information received from Google.",
+        account_already_connected: "This Gmail account is already connected to another user.",
+        storage_failed: "Failed to store account information. Please try again.",
+        oauth_error: "OAuth authorization failed. Please try again.",
+        unexpected_error: "An unexpected error occurred. Please try again.",
+      }
+
+      const message = errorMessages[error] || "Failed to connect account"
+      const description = details ? `Details: ${decodeURIComponent(details)}` : undefined
+
+      showErrorToast(message, description || "Account Connection")
+    }
+
+    // Clean up URL params
+    if (success || error) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("success")
+      url.searchParams.delete("error")
+      url.searchParams.delete("details")
+      window.history.replaceState({}, "", url.toString())
+    }
+  }, [searchParams])
+
+  // Listen for popup messages
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "ACCOUNT_CONNECTED") {
+        showSuccessToast("Account Connected", `${event.data.email} has been successfully connected!`)
+        fetchConnectedAccounts()
+      }
+    }
+
+    window.addEventListener("message", handleMessage)
+    return () => window.removeEventListener("message", handleMessage)
+  }, [])
+
+  const fetchConnectedAccounts = async () => {
+    if (!session?.user?.id) return
+
     try {
       const response = await fetch("/api/accounts")
       if (response.ok) {
         const data = await response.json()
-        setAccounts(data.accounts || [])
+        setAccounts(data.accounts)
       } else {
         throw new Error("Failed to fetch accounts")
       }
     } catch (error) {
-      showErrorToast(error, "Fetching Accounts")
+      showErrorToast(error, "Fetching Connected Accounts")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleConnectAccount = async () => {
-    setIsConnecting(true)
-    try {
-      const response = await fetch("/api/auth/connect-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        window.location.href = data.authUrl
-      } else {
-        throw new Error("Failed to initiate account connection")
-      }
-    } catch (error) {
-      showErrorToast(error, "Connecting Account")
-    } finally {
-      setIsConnecting(false)
+  const handleRemoveAccount = async (accountId: string, email: string, isPrimary: boolean) => {
+    if (isPrimary) {
+      showErrorToast("Cannot remove primary account", "Primary Account")
+      return
     }
-  }
 
-  const handleRemoveAccount = async (accountId: string) => {
-    setRemovingAccountId(accountId)
+    if (
+      !confirm(
+        `Are you sure you want to remove ${email}?\n\nThis will hide all emails from this account. The emails will remain in the database but won't be visible in your inbox.`,
+      )
+    ) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
       })
 
       if (response.ok) {
-        const data = await response.json()
-        showSuccessToast(
-          "Account Disconnected",
-          data.message || "Account has been disconnected. All emails have been preserved.",
-        )
-        fetchAccounts()
-        onAccountsChange?.()
+        setAccounts(accounts.filter((account) => account.id !== accountId))
+        showSuccessToast("Account Removed", `${email} has been removed. Emails from this account are now hidden.`)
+        // Trigger email list refresh
+        window.dispatchEvent(new CustomEvent("accountRemoved", { detail: { accountId } }))
       } else {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to remove account")
       }
     } catch (error) {
       showErrorToast(error, "Removing Account")
-    } finally {
-      setRemovingAccountId(null)
     }
   }
 
-  const getAccountInitials = (email: string, name?: string) => {
-    if (name) {
-      return name
-        .split(" ")
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2)
+  const getLastSyncInfo = (account: ConnectedAccount) => {
+    if (!account.last_sync) {
+      return {
+        text: "Never synced",
+        color: "text-amber-600",
+        bgColor: "bg-amber-100",
+        icon: Clock,
+      }
     }
-    return email.substring(0, 2).toUpperCase()
-  }
 
-  const formatLastSync = (lastSyncAt?: string) => {
-    if (!lastSyncAt) return "Never"
-
-    const date = new Date(lastSyncAt)
+    const lastSync = new Date(account.last_sync)
     const now = new Date()
-    const diffTime = Math.abs(now.getTime() - date.getTime())
-    const diffMinutes = Math.ceil(diffTime / (1000 * 60))
+    const diffMinutes = Math.floor((now.getTime() - lastSync.getTime()) / (1000 * 60))
 
-    if (diffMinutes < 60) {
-      return `${diffMinutes}m ago`
-    } else if (diffMinutes < 1440) {
-      return `${Math.ceil(diffMinutes / 60)}h ago`
+    if (diffMinutes < 30) {
+      return {
+        text: "Recently synced",
+        color: "text-green-600",
+        bgColor: "bg-green-100",
+        icon: CheckCircle,
+      }
+    } else if (diffMinutes < 60) {
+      return {
+        text: `${diffMinutes}m ago`,
+        color: "text-blue-600",
+        bgColor: "bg-blue-100",
+        icon: Clock,
+      }
     } else {
-      return `${Math.ceil(diffMinutes / 1440)}d ago`
+      const diffHours = Math.floor(diffMinutes / 60)
+      if (diffHours < 24) {
+        return {
+          text: `${diffHours}h ago`,
+          color: "text-amber-600",
+          bgColor: "bg-amber-100",
+          icon: Clock,
+        }
+      } else {
+        const diffDays = Math.floor(diffHours / 24)
+        return {
+          text: `${diffDays}d ago`,
+          color: "text-red-600",
+          bgColor: "bg-red-100",
+          icon: AlertCircle,
+        }
+      }
     }
   }
 
@@ -148,10 +202,17 @@ export function ConnectedAccounts({ onAccountsChange }: ConnectedAccountsProps) 
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold text-gray-900">Connected Accounts</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading accounts...</span>
+        <CardContent className="space-y-3">
+          <div className="animate-pulse space-y-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-center space-x-3 p-3 bg-gray-100 rounded-xl">
+                <div className="w-10 h-10 bg-gray-300 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-gray-300 rounded w-3/4" />
+                  <div className="h-2 bg-gray-300 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -165,149 +226,173 @@ export function ConnectedAccounts({ onAccountsChange }: ConnectedAccountsProps) 
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
               <Mail className="mr-2 h-4 w-4 text-blue-600" />
-              Connected Accounts
+              Gmail Accounts
               <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
                 {accounts.length}
               </Badge>
             </CardTitle>
-            <Button
-              onClick={handleConnectAccount}
-              disabled={isConnecting}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {isConnecting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-              Connect Account
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Info className="h-4 w-4 text-gray-400" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs">
+                  Multiple inbox support: Only emails from your connected accounts are shown. Remove an account to hide
+                  its emails.
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Collapsible Info Section */}
+          <Collapsible open={isInfoExpanded} onOpenChange={setIsInfoExpanded}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
+                <div className="flex items-center">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Multiple Inbox & Security Info
+                </div>
+                <ChevronDown className={cn("h-3 w-3 transition-transform", isInfoExpanded && "rotate-180")} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-2">
+              <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
+                <div className="flex items-center">
+                  <Mail className="h-3 w-3 text-blue-600 mr-1" />
+                  <span className="font-medium">Multiple Inboxes:</span> Each account shows only its own emails
+                </div>
+                <div className="flex items-center">
+                  <Zap className="h-3 w-3 text-blue-600 mr-1" />
+                  <span className="font-medium">Auto-sync:</span> New emails imported every 15 minutes
+                </div>
+                <div className="flex items-center">
+                  <Shield className="h-3 w-3 text-green-600 mr-1" />
+                  <span className="font-medium">Security:</span> Google OAuth 2.0 - credentials never stored
+                </div>
+                <div className="flex items-center">
+                  <CheckCircle className="h-3 w-3 text-purple-600 mr-1" />
+                  <span className="font-medium">AI Processing:</span> Automatic categorization and summarization
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
-        <CardContent className="space-y-3">
           {accounts.length === 0 ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-                <Mail className="h-6 w-6 text-gray-400" />
+              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+                <Mail className="h-8 w-8 text-blue-600" />
               </div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">No accounts connected</h3>
-              <p className="text-xs text-gray-600 mb-4">Connect your Gmail account to start organizing your emails</p>
-              <Button
-                onClick={handleConnectAccount}
-                disabled={isConnecting}
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isConnecting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                Connect Gmail Account
-              </Button>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
+              <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+                Start by connecting your Gmail accounts. Each account will have its own separate inbox with automatic AI
+                processing.
+              </p>
             </div>
           ) : (
-            accounts.map((account) => (
-              <div
-                key={account.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200/50 bg-white/30 hover:bg-white/50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src="/placeholder.svg" alt={account.name || account.email} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm">
-                      {getAccountInitials(account.email, account.name)}
-                    </AvatarFallback>
-                  </Avatar>
+            <div className="space-y-3">
+              {accounts.map((account) => {
+                const syncInfo = getLastSyncInfo(account)
+                const SyncIcon = syncInfo.icon
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">{account.name || account.email}</p>
-                      {account.is_primary && (
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Crown className="h-4 w-4 text-yellow-500" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Primary Account</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                    {account.name && <p className="text-xs text-gray-600 truncate">{account.email}</p>}
-                    <div className="flex items-center space-x-2 mt-1">
-                      <div className="flex items-center space-x-1">
-                        {account.sync_enabled ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <AlertCircle className="h-3 w-3 text-orange-500" />
-                        )}
-                        <span className="text-xs text-gray-500">
-                          {account.sync_enabled ? "Sync enabled" : "Sync disabled"}
-                        </span>
+                return (
+                  <div
+                    key={account.id}
+                    className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
+                          <AvatarImage
+                            src={account.picture || account.users?.image || "/placeholder.svg"}
+                            alt={account.name || account.email}
+                          />
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                            {account.name ? (
+                              account.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                            ) : (
+                              <User className="h-4 w-4" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
+                          <CheckCircle className="h-2.5 w-2.5 text-white" />
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-400">•</span>
-                      <span className="text-xs text-gray-500">Last sync: {formatLastSync(account.last_sync_at)}</span>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
+                          {account.is_primary && (
+                            <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+
+                        {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
+
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center text-xs text-gray-500">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
+                            Connected {new Date(account.created_at).toLocaleDateString()}
+                          </div>
+                          <span className="text-gray-400">•</span>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <div className={`flex items-center text-xs ${syncInfo.color}`}>
+                                <SyncIcon className="h-3 w-3 mr-1" />
+                                {syncInfo.text}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                Last sync: {account.last_sync ? new Date(account.last_sync).toLocaleString() : "Never"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {!account.is_primary && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Remove account (emails will be hidden)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {!account.is_primary && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={removingAccountId === account.id}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          {removingAccountId === account.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Disconnect Account</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to disconnect <strong>{account.email}</strong>?
-                            <br />
-                            <br />
-                            <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                              <div className="flex items-start space-x-2">
-                                <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <div className="text-sm text-blue-800">
-                                  <strong>Don't worry!</strong> All your existing emails will be preserved and remain
-                                  accessible. Only the account connection will be removed, and email syncing will stop.
-                                </div>
-                              </div>
-                            </div>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleRemoveAccount(account.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Disconnect Account
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              </div>
-            ))
+                )
+              })}
+            </div>
           )}
+
+          {/* Email Import Button */}
+          {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={fetchConnectedAccounts} />}
+
+          {/* Connection Dialog */}
+          <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
         </CardContent>
       </Card>
-
-      <MultiAccountDialog
-        isOpen={showMultiAccountDialog}
-        onClose={() => setShowMultiAccountDialog(false)}
-        onAccountsChange={() => {
-          fetchAccounts()
-          onAccountsChange?.()
-        }}
-      />
     </TooltipProvider>
   )
 }

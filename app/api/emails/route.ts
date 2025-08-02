@@ -21,6 +21,20 @@ export async function GET(request: NextRequest) {
     const sender = searchParams.get("sender")
     const search = searchParams.get("search")
 
+    // First, get all connected accounts for the current user
+    const { data: connectedAccounts, error: accountsError } = await supabase
+      .from("user_accounts")
+      .select("id")
+      .eq("user_id", session.user.id)
+
+    if (accountsError) {
+      console.error("Error fetching connected accounts:", accountsError)
+      return NextResponse.json({ error: "Failed to fetch connected accounts" }, { status: 500 })
+    }
+
+    const connectedAccountIds = connectedAccounts.map((acc) => acc.id)
+
+    // Only show emails from currently connected accounts
     let query = supabase
       .from("emails")
       .select(`
@@ -29,6 +43,7 @@ export async function GET(request: NextRequest) {
         user_accounts(email, name)
       `)
       .eq("user_id", session.user.id)
+      .in("account_id", connectedAccountIds) // Only emails from connected accounts
       .order("received_at", { ascending: false })
       .limit(100)
 
@@ -85,13 +100,7 @@ export async function GET(request: NextRequest) {
             email: email.user_accounts.email,
             name: email.user_accounts.name,
           }
-        : email.disconnected_account_email
-          ? {
-              email: email.disconnected_account_email,
-              name: null,
-              disconnected: true,
-            }
-          : null,
+        : null,
     }))
 
     return NextResponse.json({ success: true, emails: transformedEmails })

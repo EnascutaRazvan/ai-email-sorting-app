@@ -29,29 +29,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Cannot remove primary account" }, { status: 400 })
     }
 
-    // First, update all emails from this account to mark them as from a disconnected account
-    // We'll set account_id to null and store the original account email for display purposes
-    const { error: emailUpdateError } = await supabase
-      .from("emails")
-      .update({
-        account_id: null,
-        disconnected_account_email: account.email,
-      })
-      .eq("account_id", params.id)
-      .eq("user_id", session.user.id)
-
-    if (emailUpdateError) {
-      console.error("Error updating emails for disconnected account:", emailUpdateError)
-      return NextResponse.json(
-        {
-          error: "Failed to update emails for account removal",
-          details: emailUpdateError.message,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Now delete the account
+    // Simply delete the account - emails will remain in database but won't be shown
+    // since we only show emails from currently connected accounts
     const { error } = await supabase.from("user_accounts").delete().eq("id", params.id).eq("user_id", session.user.id)
 
     if (error) {
@@ -61,7 +40,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({
       success: true,
-      message: "Account disconnected successfully. All emails have been preserved.",
+      message: "Account removed successfully.",
     })
   } catch (error) {
     console.error("API error:", error)
