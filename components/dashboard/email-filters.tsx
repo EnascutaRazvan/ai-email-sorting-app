@@ -120,7 +120,7 @@ export function EmailFilters({
             </Button>
           </CollapsibleTrigger>
 
-          <CollapsibleContent className="mt-4 space-y-4 rounded-lg border bg-card p-4">
+          <CollapsibleContent className="mt-4 space-y-4 rounded-lg border bg-white p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Account Filter */}
               <div className="space-y-2">
@@ -132,7 +132,7 @@ export function EmailFilters({
                   <SelectTrigger>
                     <SelectValue placeholder="All accounts" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white">
                     <SelectItem value="all">All accounts</SelectItem>
                     {accounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
@@ -179,7 +179,7 @@ export function EmailFilters({
                       {filters.dateFrom ? format(filters.dateFrom, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className="w-auto p-0 bg-white">
                     <Calendar
                       mode="single"
                       selected={filters.dateFrom}
@@ -206,7 +206,7 @@ export function EmailFilters({
                       {filters.dateTo ? format(filters.dateTo, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className="w-auto p-0 bg-white">
                     <Calendar
                       mode="single"
                       selected={filters.dateTo}

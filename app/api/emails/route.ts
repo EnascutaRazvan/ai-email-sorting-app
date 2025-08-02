@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         received_at,
         is_read,
         account_id,
-        user_accounts!inner(email, name),
+        user_accounts!inner(email, name, picture),
         email_categories(
           category_id,
           is_ai_suggested,
@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
         id: email.account_id,
         email: email.user_accounts?.email,
         name: email.user_accounts?.name,
+        picture: email.user_accounts?.picture,
       },
       categories: (email.email_categories || [])
         .map((ec) => ({

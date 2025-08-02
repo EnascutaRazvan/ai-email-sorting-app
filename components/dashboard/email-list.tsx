@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  AtSign,
 } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
@@ -48,6 +49,7 @@ interface Email {
     id: string
     email: string
     name?: string
+    picture?: string
   }
 }
 
@@ -90,6 +92,22 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
   useEffect(() => {
     setFilters((prev) => ({ ...prev, categoryIds: selectedCategories }))
   }, [selectedCategories])
+
+  // Listen for account removal events
+  useEffect(() => {
+    const handleAccountRemoved = (event: CustomEvent) => {
+      const { accountId } = event.detail
+      // Filter out emails from the removed account
+      setEmails((prevEmails) => prevEmails.filter((email) => email.account.id !== accountId))
+      // Reset pagination if needed
+      if (emails.length <= pagination.limit) {
+        setPagination((prev) => ({ ...prev, page: 1 }))
+      }
+    }
+
+    window.addEventListener("accountRemoved", handleAccountRemoved as EventListener)
+    return () => window.removeEventListener("accountRemoved", handleAccountRemoved as EventListener)
+  }, [emails.length, pagination.limit])
 
   const fetchEmails = async () => {
     if (!session?.user?.id) return
@@ -193,6 +211,11 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
     return match ? match[1].trim() : sender
   }
 
+  const getSenderEmail = (sender: string) => {
+    const match = sender.match(/<([^>]+)>/)
+    return match ? match[1] : sender
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -206,6 +229,10 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
     } else {
       return date.toLocaleDateString([], { month: "short", day: "numeric" })
     }
+  }
+
+  const getAccountDisplayName = (account: Email["account"]) => {
+    return account.email.split("@")[0]
   }
 
   if (isLoading) {
@@ -278,7 +305,10 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                     >
                       <div className="flex items-start space-x-3">
                         <Avatar className="h-10 w-10 flex-shrink-0">
-                          <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
+                          <AvatarImage
+                            src={email.account.picture || "/placeholder.svg"}
+                            alt={getSenderName(email.sender)}
+                          />
                           <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
                             {getSenderInitials(email.sender)}
                           </AvatarFallback>
@@ -294,21 +324,20 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                               </p>
 
                               {/* Account Label */}
-                              {email.account && (
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs bg-gray-50 text-gray-600 border-gray-300"
-                                    >
-                                      {email.account.email.split("@")[0]}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Account: {email.account.email}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs bg-blue-50 text-blue-700 border-blue-200 flex items-center"
+                                  >
+                                    <AtSign className="h-3 w-3 mr-1" />
+                                    {getAccountDisplayName(email.account)}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Account: {email.account.email}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
 
                             <div className="flex items-center space-x-2 flex-shrink-0">
@@ -338,9 +367,18 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                                     color: category.color,
                                     borderColor: `${category.color}30`,
                                   }}
-                                  className={`text-xs border ${category.is_ai_suggested ? "border-dashed" : ""}`}
+                                  className={`text-xs border ${category.is_ai_suggested ? "border-dashed" : ""} flex items-center`}
                                 >
-                                  {category.is_ai_suggested && <Bot className="h-3 w-3 mr-1" />}
+                                  {category.is_ai_suggested && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Bot className="h-3 w-3 mr-1" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>AI suggested category</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                   {category.name}
                                 </Badge>
                               ))}
@@ -364,9 +402,7 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                           <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
                             <div className="flex items-center space-x-2">
                               <User className="h-3 w-3" />
-                              <span className="truncate">
-                                {email.sender_email || email.account?.email || "Unknown"}
-                              </span>
+                              <span className="truncate">{getSenderEmail(email.sender)}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
@@ -399,7 +435,7 @@ export function EmailList({ selectedCategories, accounts, categories, onEmailsCh
                       <select
                         value={pagination.limit}
                         onChange={(e) => handleLimitChange(Number(e.target.value))}
-                        className="text-sm border rounded px-2 py-1"
+                        className="text-sm border rounded px-2 py-1 bg-white"
                       >
                         <option value={5}>5</option>
                         <option value={10}>10</option>

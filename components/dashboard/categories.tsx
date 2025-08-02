@@ -20,11 +20,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Folder, Trash2, FolderOpen, Settings, Sparkles } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Plus, Folder, Trash2, FolderOpen, Settings, Sparkles, ChevronDown } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { cn } from "@/lib/utils"
 
 interface Category {
   id: string
@@ -48,6 +51,7 @@ export function Categories({ selectedCategories, onCategorySelect, onCategoriesC
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [isCreatingDefaults, setIsCreatingDefaults] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const [newCategory, setNewCategory] = useState({
     name: "",
     description: "",
@@ -176,6 +180,14 @@ export function Categories({ selectedCategories, onCategorySelect, onCategoriesC
     }
   }
 
+  const handleSelectAll = () => {
+    if (selectedCategories.length === categories.length) {
+      onCategorySelect([])
+    } else {
+      onCategorySelect(categories.map((cat) => cat.id))
+    }
+  }
+
   const getTotalEmailCount = () => {
     return categories.reduce((sum, cat) => sum + cat.email_count, 0)
   }
@@ -215,7 +227,7 @@ export function Categories({ selectedCategories, onCategorySelect, onCategoriesC
                 <Settings className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 bg-white">
               <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Category
@@ -234,7 +246,7 @@ export function Categories({ selectedCategories, onCategorySelect, onCategoriesC
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-3">
         {categories.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
@@ -251,45 +263,113 @@ export function Categories({ selectedCategories, onCategorySelect, onCategoriesC
           </div>
         ) : (
           <>
-            <Button
-              onClick={() => onCategorySelect([])}
-              variant={selectedCategories.length === 0 ? "default" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-            >
-              <FolderOpen className="mr-2 h-4 w-4" />
-              All Emails
-              <Badge variant="secondary" className="ml-auto">
-                {getTotalEmailCount()}
-              </Badge>
-            </Button>
-
-            {categories.map((category) => (
-              <div key={category.id} className="group relative">
+            {/* Collapsible Category List */}
+            <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+              <div className="space-y-2">
+                {/* All Emails Button */}
                 <Button
-                  onClick={() => handleCategoryToggle(category.id)}
-                  variant={selectedCategories.includes(category.id) ? "default" : "ghost"}
-                  className="w-full justify-start pr-8"
+                  onClick={() => onCategorySelect([])}
+                  variant={selectedCategories.length === 0 ? "default" : "ghost"}
+                  className="w-full justify-start"
                   size="sm"
                 >
-                  <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
-                  {category.name}
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  All Emails
                   <Badge variant="secondary" className="ml-auto">
-                    {category.email_count}
+                    {getTotalEmailCount()}
                   </Badge>
                 </Button>
-                {!category.is_default && (
-                  <Button
-                    onClick={() => handleDeleteCategory(category.id, category.name)}
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3 w-3" />
+
+                {/* Show first 3 categories by default */}
+                {categories.slice(0, 3).map((category) => (
+                  <div key={category.id} className="group relative">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={selectedCategories.includes(category.id)}
+                        onCheckedChange={() => handleCategoryToggle(category.id)}
+                        className="flex-shrink-0"
+                      />
+                      <Button
+                        onClick={() => handleCategoryToggle(category.id)}
+                        variant="ghost"
+                        className="flex-1 justify-start pr-8"
+                        size="sm"
+                      >
+                        <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
+                        {category.name}
+                        <Badge variant="secondary" className="ml-auto">
+                          {category.email_count}
+                        </Badge>
+                      </Button>
+                      {!category.is_default && (
+                        <Button
+                          onClick={() => handleDeleteCategory(category.id, category.name)}
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Collapsible content for remaining categories */}
+                {categories.length > 3 && (
+                  <>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
+                        <span>{isExpanded ? "Show Less" : `Show ${categories.length - 3} More Categories`}</span>
+                        <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2">
+                      {categories.slice(3).map((category) => (
+                        <div key={category.id} className="group relative">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              checked={selectedCategories.includes(category.id)}
+                              onCheckedChange={() => handleCategoryToggle(category.id)}
+                              className="flex-shrink-0"
+                            />
+                            <Button
+                              onClick={() => handleCategoryToggle(category.id)}
+                              variant="ghost"
+                              className="flex-1 justify-start pr-8"
+                              size="sm"
+                            >
+                              <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
+                              {category.name}
+                              <Badge variant="secondary" className="ml-auto">
+                                {category.email_count}
+                              </Badge>
+                            </Button>
+                            {!category.is_default && (
+                              <Button
+                                onClick={() => handleDeleteCategory(category.id, category.name)}
+                                variant="ghost"
+                                size="sm"
+                                className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </>
+                )}
+
+                {/* Select All/None */}
+                {categories.length > 0 && (
+                  <Button onClick={handleSelectAll} variant="outline" size="sm" className="w-full mt-2 bg-transparent">
+                    {selectedCategories.length === categories.length ? "Deselect All" : "Select All"}
                   </Button>
                 )}
               </div>
-            ))}
+            </Collapsible>
           </>
         )}
 
