@@ -25,8 +25,12 @@ interface ConnectedAccount {
   token_expires_at?: string
   scope?: string
   last_sync?: string
+  users?: UserColumn
 }
 
+interface UserColumn {
+  image?: string
+}
 export function ConnectedAccounts() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
@@ -298,7 +302,7 @@ export function ConnectedAccounts() {
                       <div className="relative">
                         <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
                           <AvatarImage
-                            src={account.picture || "/placeholder.svg"}
+                            src={account.picture || account.users?.image || "/placeholder.svg"}
                             alt={account.name || account.email}
                           />
                           <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">

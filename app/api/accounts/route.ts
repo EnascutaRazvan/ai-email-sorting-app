@@ -24,11 +24,13 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at,
         token_expires_at,
-        scope
-      `)
+        scope,
+        last_sync,
+        users (image)
+    `)
       .eq("user_id", session.user.id)
       .order("is_primary", { ascending: false })
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Error fetching accounts:", error)
