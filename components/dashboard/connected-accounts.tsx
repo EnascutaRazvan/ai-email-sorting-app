@@ -6,11 +6,14 @@ import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
+import { EmailImportButton } from "./email-import-button"
+import { cn } from "@/lib/utils"
 
 interface ConnectedAccount {
   id: string
@@ -21,6 +24,7 @@ interface ConnectedAccount {
   created_at: string
   token_expires_at?: string
   scope?: string
+  last_sync?: string
 }
 
 export function ConnectedAccounts() {
@@ -28,6 +32,7 @@ export function ConnectedAccounts() {
   const searchParams = useSearchParams()
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isInfoExpanded, setIsInfoExpanded] = useState(false)
 
   useEffect(() => {
     fetchConnectedAccounts()
@@ -111,7 +116,11 @@ export function ConnectedAccounts() {
       return
     }
 
-    if (!confirm(`Are you sure you want to remove ${email}?\n\nThis will stop syncing emails from this account.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to remove ${email}?\n\nThis will stop syncing emails from this account and remove all associated emails from your dashboard.`,
+      )
+    ) {
       return
     }
 
@@ -122,13 +131,64 @@ export function ConnectedAccounts() {
 
       if (response.ok) {
         setAccounts(accounts.filter((account) => account.id !== accountId))
-        showSuccessToast("Account Removed", `${email} has been disconnected`)
+        showSuccessToast("Account Removed", `${email} has been disconnected and associated emails removed`)
+        // Trigger email list refresh
+        window.dispatchEvent(new CustomEvent("accountRemoved", { detail: { accountId } }))
       } else {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to remove account")
       }
     } catch (error) {
       showErrorToast(error, "Removing Account")
+    }
+  }
+
+  const getLastSyncInfo = (account: ConnectedAccount) => {
+    if (!account.last_sync) {
+      return {
+        text: "Never synced",
+        color: "text-amber-600",
+        bgColor: "bg-amber-100",
+        icon: Clock,
+      }
+    }
+
+    const lastSync = new Date(account.last_sync)
+    const now = new Date()
+    const diffMinutes = Math.floor((now.getTime() - lastSync.getTime()) / (1000 * 60))
+
+    if (diffMinutes < 30) {
+      return {
+        text: "Recently synced",
+        color: "text-green-600",
+        bgColor: "bg-green-100",
+        icon: CheckCircle,
+      }
+    } else if (diffMinutes < 60) {
+      return {
+        text: `${diffMinutes}m ago`,
+        color: "text-blue-600",
+        bgColor: "bg-blue-100",
+        icon: Clock,
+      }
+    } else {
+      const diffHours = Math.floor(diffMinutes / 60)
+      if (diffHours < 24) {
+        return {
+          text: `${diffHours}h ago`,
+          color: "text-amber-600",
+          bgColor: "bg-amber-100",
+          icon: Clock,
+        }
+      } else {
+        const diffDays = Math.floor(diffHours / 24)
+        return {
+          text: `${diffDays}d ago`,
+          color: "text-red-600",
+          bgColor: "bg-red-100",
+          icon: AlertCircle,
+        }
+      }
     }
   }
 
@@ -156,114 +216,175 @@ export function ConnectedAccounts() {
   }
 
   return (
-    <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-            <Mail className="mr-2 h-4 w-4 text-blue-600" />
-            Gmail Accounts
-            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
-              {accounts.length}
-            </Badge>
-          </CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Security Notice */}
-        <Alert className="border-blue-200 bg-blue-50/50">
-          <Shield className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-xs text-blue-800">
-            Secured with Google OAuth 2.0. Your credentials are never stored.
-          </AlertDescription>
-        </Alert>
-
-        {accounts.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
-              <Mail className="h-8 w-8 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
-            <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
-              Start by connecting your Gmail accounts to manage all your emails in one place
-            </p>
+    <TooltipProvider>
+      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
+              <Mail className="mr-2 h-4 w-4 text-blue-600" />
+              Gmail Accounts
+              <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+                {accounts.length}
+              </Badge>
+            </CardTitle>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Info className="h-4 w-4 text-gray-400" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-xs">
+                <p className="text-xs">
+                  Emails are automatically imported every 15 minutes. Secured with Google OAuth 2.0 - your credentials
+                  are never stored.
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {accounts.map((account) => (
-              <div
-                key={account.id}
-                className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
-                      <AvatarImage src={account.picture || "/placeholder.svg"} alt={account.name || account.email} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
-                        {account.name ? (
-                          account.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                        ) : (
-                          <User className="h-4 w-4" />
-                        )}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
-                      <CheckCircle className="h-2.5 w-2.5 text-white" />
-                    </div>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
-                      {account.is_primary && (
-                        <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
-                          Primary
-                        </Badge>
-                      )}
-                    </div>
-
-                    {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
-
-                    <div className="flex items-center text-xs text-gray-500">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
-                      Connected {new Date(account.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    {!account.is_primary && (
-                      <Button
-                        onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Collapsible Info Section */}
+          <Collapsible open={isInfoExpanded} onOpenChange={setIsInfoExpanded}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
+                <div className="flex items-center">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Security & Auto-sync Info
+                </div>
+                <ChevronDown className={cn("h-3 w-3 transition-transform", isInfoExpanded && "rotate-180")} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-2">
+              <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
+                <div className="flex items-center">
+                  <Zap className="h-3 w-3 text-blue-600 mr-1" />
+                  <span className="font-medium">Auto-sync:</span> New emails imported every 15 minutes
+                </div>
+                <div className="flex items-center">
+                  <Shield className="h-3 w-3 text-green-600 mr-1" />
+                  <span className="font-medium">Security:</span> Google OAuth 2.0 - credentials never stored
+                </div>
+                <div className="flex items-center">
+                  <CheckCircle className="h-3 w-3 text-purple-600 mr-1" />
+                  <span className="font-medium">AI Processing:</span> Automatic categorization and summarization
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </CollapsibleContent>
+          </Collapsible>
 
-        {/* Connection Dialog */}
-        <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
+          {accounts.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+                <Mail className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
+              <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+                Start by connecting your Gmail accounts to manage all your emails in one place with automatic AI
+                processing
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {accounts.map((account) => {
+                const syncInfo = getLastSyncInfo(account)
+                const SyncIcon = syncInfo.icon
 
-        {/* Development Notice */}
-        {process.env.NODE_ENV === "development" && (
-          <Alert variant="destructive" className="border-amber-200 bg-amber-50">
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="text-xs text-amber-800">
-              <strong>Dev Mode:</strong> Configure Google Cloud Console if you encounter OAuth errors.
-            </AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+                return (
+                  <div
+                    key={account.id}
+                    className="group relative bg-gradient-to-r from-white to-gray-50/50 border border-gray-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-200 hover:border-blue-200"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="relative">
+                        <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
+                          <AvatarImage
+                            src={account.picture || "/placeholder.svg"}
+                            alt={account.name || account.email}
+                          />
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-sm font-medium">
+                            {account.name ? (
+                              account.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                            ) : (
+                              <User className="h-4 w-4" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
+                          <CheckCircle className="h-2.5 w-2.5 text-white" />
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-medium text-sm text-gray-900 truncate">{account.email}</p>
+                          {account.is_primary && (
+                            <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs px-2 py-0.5">
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+
+                        {account.name && <p className="text-xs text-gray-600 truncate mb-1">{account.name}</p>}
+
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center text-xs text-gray-500">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
+                            Connected {new Date(account.created_at).toLocaleDateString()}
+                          </div>
+                          <span className="text-gray-400">•</span>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <div className={`flex items-center text-xs ${syncInfo.color}`}>
+                                <SyncIcon className="h-3 w-3 mr-1" />
+                                {syncInfo.text}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                Last sync: {account.last_sync ? new Date(account.last_sync).toLocaleString() : "Never"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {!account.is_primary && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                onClick={() => handleRemoveAccount(account.id, account.email, account.is_primary)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Remove account and all associated emails</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Email Import Button */}
+          {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={fetchConnectedAccounts} />}
+
+          {/* Connection Dialog */}
+          <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   )
 }
