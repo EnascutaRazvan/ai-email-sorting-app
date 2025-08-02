@@ -28,7 +28,6 @@ export interface EmailFilters {
   dateFrom: Date | null
   dateTo: Date | null
   sender: string
-  isRead: boolean | "all"
 }
 
 export function EmailFilters({
@@ -46,7 +45,6 @@ export function EmailFilters({
     dateFrom: null,
     dateTo: null,
     sender: "",
-    isRead: "all",
   })
 
   const updateFilters = (newFilters: Partial<EmailFilters>) => {
@@ -63,7 +61,6 @@ export function EmailFilters({
       dateFrom: null,
       dateTo: null,
       sender: "",
-      isRead: "all",
     }
     setFilters(clearedFilters)
     onFiltersChange(clearedFilters)
@@ -76,7 +73,6 @@ export function EmailFilters({
     if (filters.accountId !== "all") count++
     if (filters.dateFrom || filters.dateTo) count++
     if (filters.sender) count++
-    if (filters.isRead !== "all") count++
     return count
   }
 
@@ -125,10 +121,7 @@ export function EmailFilters({
               {/* Category Filter */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Category</Label>
-                <Select
-                  value={filters.categoryId || "all"}
-                  onValueChange={(value) => updateFilters({ categoryId: value === "all" ? null : value })}
-                >
+                <Select value={filters.categoryId} onValueChange={(value) => updateFilters({ categoryId: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All categories" />
                   </SelectTrigger>
@@ -150,10 +143,7 @@ export function EmailFilters({
               {/* Account Filter */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Account</Label>
-                <Select
-                  value={filters.accountId || "all"}
-                  onValueChange={(value) => updateFilters({ accountId: value === "all" ? null : value })}
-                >
+                <Select value={filters.accountId} onValueChange={(value) => updateFilters({ accountId: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All accounts" />
                   </SelectTrigger>
@@ -231,26 +221,6 @@ export function EmailFilters({
                   </PopoverContent>
                 </Popover>
               </div>
-
-              {/* Read Status Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Read Status</Label>
-                <Select
-                  value={String(filters.isRead)}
-                  onValueChange={(value) =>
-                    updateFilters({ isRead: value === "true" ? true : value === "false" ? false : "all" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="true">Read</SelectItem>
-                    <SelectItem value="false">Unread</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t">
@@ -309,12 +279,6 @@ export function EmailFilters({
               Date: {filters.dateFrom ? format(filters.dateFrom, "MMM d") : "Start"} -{" "}
               {filters.dateTo ? format(filters.dateTo, "MMM d") : "End"}
               <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ dateFrom: null, dateTo: null })} />
-            </Badge>
-          )}
-          {filters.isRead !== "all" && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Status: {filters.isRead ? "Read" : "Unread"}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ isRead: "all" })} />
             </Badge>
           )}
         </div>

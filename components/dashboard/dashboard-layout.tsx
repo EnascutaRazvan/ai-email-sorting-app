@@ -2,74 +2,65 @@
 
 import type React from "react"
 
-import type { ReactNode } from "react"
-import { SessionProvider } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
+import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { signOut, useSession } from "next-auth/react"
-import { LogOut, Settings } from "lucide-react"
+import { Mail, LogOut, Settings } from "lucide-react"
 
 interface DashboardLayoutProps {
-  children: ReactNode
+  children: React.ReactNode
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: session } = useSession()
 
   return (
-    <SessionProvider>
-      <div className="flex min-h-screen w-full flex-col bg-muted/40">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-          <div className="flex items-center gap-2">
-            <MailIcon className="h-6 w-6" />
-            <h1 className="text-lg font-semibold">Email Sorter</h1>
+    <div className="min-h-screen bg-white dark:bg-gray-950">
+      {/* Header */}
+      <header className="border-b bg-white dark:bg-gray-950 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+              <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold">AI Email Sorting</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Intelligent email management</p>
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="overflow-hidden rounded-full">
-                  <Avatar>
-                    <AvatarImage src={session?.user?.image || "/placeholder-user.jpg"} alt="User Avatar" />
-                    <AvatarFallback>{session?.user?.name?.[0] || "U"}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center gap-2" onClick={() => signOut()}>
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-6">{children}</main>
-      </div>
-    </SessionProvider>
-  )
-}
 
-function MailIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="20" height="16" x="2" y="4" rx="2" />
-      <path d="m22 7-8.97 5.73a1.8 1.8 0 0 1-2.06 0L2 7" />
-    </svg>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || ""} />
+                  <AvatarFallback>{session?.user?.name?.charAt(0) || "U"}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <div className="flex items-center justify-start gap-2 p-2">
+                <div className="flex flex-col space-y-1 leading-none">
+                  <p className="font-medium">{session?.user?.name}</p>
+                  <p className="w-[200px] truncate text-sm text-muted-foreground">{session?.user?.email}</p>
+                </div>
+              </div>
+              <DropdownMenuItem>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => signOut()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="h-[calc(100vh-73px)]">{children}</main>
+    </div>
   )
 }
