@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
+import { htmlToText } from "html-to-text"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -234,15 +235,17 @@ function extractEmailBody(payload: any): string {
   return "No content available"
 }
 
-async function generateEmailSummary(subject: string, from: string, body: string): Promise<string> {
+async function generateEmailSummary(subject: string, from: string, htmlBody: string): Promise<string> {
   try {
+    const plainTextBody = cleanHtmlToText(htmlBody)
+
     const { text } = await generateText({
       model: groq("llama-3.1-8b-instant"),
       prompt: `Summarize this email in 1-2 sentences. Focus on the main purpose and any action items.
 
 Subject: ${subject}
 From: ${from}
-Body: ${body.substring(0, 2000)}...
+Body: ${plainTextBody.substring(0, 2000)}...
 
 Summary:`,
       maxTokens: 100,
@@ -311,3 +314,16 @@ async function archiveEmailInGmail(messageId: string, accessToken: string): Prom
     console.error("Error archiving email:", error)
   }
 }
+
+
+
+function cleanHtmlToText(html: string): string {
+  return htmlToText(html, {
+    wordwrap: 130,
+    selectors: [
+      { selector: "a", options: { ignoreHref: true } },
+      { selector: "img", format: "skip" },
+    ],
+  })
+}
+
