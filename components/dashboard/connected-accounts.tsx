@@ -122,7 +122,7 @@ export function ConnectedAccounts() {
 
     if (
       !confirm(
-        `Are you sure you want to remove ${email}?\n\nThis will stop syncing emails from this account and remove all associated emails from your dashboard.`,
+        `Are you sure you want to disconnect ${email}?\n\nThis will stop syncing new emails from this account, but your existing emails will be preserved and marked as from a disconnected account.`,
       )
     ) {
       return
@@ -135,7 +135,10 @@ export function ConnectedAccounts() {
 
       if (response.ok) {
         setAccounts(accounts.filter((account) => account.id !== accountId))
-        showSuccessToast("Account Removed", `${email} has been disconnected and associated emails removed`)
+        showSuccessToast(
+          "Account Disconnected",
+          `${email} has been disconnected. Your existing emails from this account have been preserved.`,
+        )
         // Trigger email list refresh
         window.dispatchEvent(new CustomEvent("accountRemoved", { detail: { accountId } }))
       } else {
@@ -370,7 +373,7 @@ export function ConnectedAccounts() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Remove account and all associated emails</p>
+                              <p>Disconnect account (emails will be preserved)</p>
                             </TooltipContent>
                           </Tooltip>
                         )}

@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         categories(id, name, color),
-        user_accounts(email, name)
+        user_accounts(email, name),
+        disconnected_account_email
       `)
       .eq("user_id", session.user.id)
       .order("received_at", { ascending: false })
@@ -85,7 +86,13 @@ export async function GET(request: NextRequest) {
             email: email.user_accounts.email,
             name: email.user_accounts.name,
           }
-        : null,
+        : email.disconnected_account_email
+          ? {
+              email: email.disconnected_account_email,
+              name: null,
+              disconnected: true,
+            }
+          : null,
     }))
 
     return NextResponse.json({ success: true, emails: transformedEmails })

@@ -31,6 +31,7 @@ interface Email {
   account?: {
     email: string
     name?: string
+    disconnected?: boolean
   }
   suggested_category?: {
     id: string
@@ -438,12 +439,24 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                             {email.account && (
                               <Tooltip>
                                 <TooltipTrigger>
-                                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs border-gray-300 ${
+                                      email.account.disconnected
+                                        ? "bg-orange-50 text-orange-600 border-orange-300"
+                                        : "bg-gray-50 text-gray-600"
+                                    }`}
+                                  >
+                                    {email.account.disconnected && <span className="mr-1">⚠️</span>}
                                     {email.account.email.split("@")[0]}
+                                    {email.account.disconnected && " (disconnected)"}
                                   </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Account: {email.account.email}</p>
+                                  <p>
+                                    Account: {email.account.email}
+                                    {email.account.disconnected && " (This account has been disconnected)"}
+                                  </p>
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -519,7 +532,12 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                         <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
                           <div className="flex items-center space-x-2">
                             <User className="h-3 w-3" />
-                            <span className="truncate">{email.account?.email || "Unknown account"}</span>
+                            <span className="truncate">
+                              {email.account?.email || "Unknown account"}
+                              {email.account?.disconnected && (
+                                <span className="text-orange-600 ml-1">(disconnected)</span>
+                              )}
+                            </span>
                           </div>
                           <div className="flex items-center space-x-1">
                             {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
