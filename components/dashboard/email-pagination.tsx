@@ -21,134 +21,125 @@ export function EmailPagination({
   onEmailsPerPageChange,
   totalEmails,
 }: EmailPaginationProps) {
-  const startIndex = (currentPage - 1) * emailsPerPage + 1
-  const endIndex = Math.min(currentPage * emailsPerPage, totalEmails)
+  const pageNumbers = []
+  const maxPageButtons = 5 // Number of page buttons to show
 
-  const getVisiblePages = () => {
-    const delta = 2
-    const range = []
-    const rangeWithDots = []
+  if (totalPages <= maxPageButtons) {
+    for (let i = 1; i <= totalPages; i++) {
+      pageNumbers.push(i)
+    }
+  } else {
+    // Always show first page
+    pageNumbers.push(1)
 
-    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
-      range.push(i)
+    // Determine start and end of the middle range
+    let startPage = Math.max(2, currentPage - Math.floor(maxPageButtons / 2) + 1)
+    let endPage = Math.min(totalPages - 1, currentPage + Math.floor(maxPageButtons / 2) - 1)
+
+    if (currentPage <= Math.ceil(maxPageButtons / 2)) {
+      endPage = maxPageButtons - 1
+    } else if (currentPage >= totalPages - Math.floor(maxPageButtons / 2)) {
+      startPage = totalPages - maxPageButtons + 2
     }
 
-    if (currentPage - delta > 2) {
-      rangeWithDots.push(1, "...")
-    } else {
-      rangeWithDots.push(1)
+    // Add ellipsis if needed
+    if (startPage > 2) {
+      pageNumbers.push("...")
     }
 
-    rangeWithDots.push(...range)
-
-    if (currentPage + delta < totalPages - 1) {
-      rangeWithDots.push("...", totalPages)
-    } else if (totalPages > 1) {
-      rangeWithDots.push(totalPages)
+    // Add middle pages
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i)
     }
 
-    return rangeWithDots
-  }
+    // Add ellipsis if needed
+    if (endPage < totalPages - 1) {
+      pageNumbers.push("...")
+    }
 
-  if (totalPages <= 1) {
-    return (
-      <div className="flex items-center justify-between px-4 py-3 border-t bg-background">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">
-            Showing {totalEmails} of {totalEmails} emails
-          </span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">Rows per page:</span>
-          <Select value={String(emailsPerPage)} onValueChange={onEmailsPerPageChange}>
-            <SelectTrigger className="w-16">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    )
+    // Always show last page
+    pageNumbers.push(totalPages)
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t bg-background">
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-muted-foreground">
-          Showing {startIndex} to {endIndex} of {totalEmails} emails
-        </span>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-muted-foreground">Rows per page:</span>
+    <div className="flex items-center justify-between p-4 border-t bg-background">
+      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+        <span>Emails per page:</span>
         <Select value={String(emailsPerPage)} onValueChange={onEmailsPerPageChange}>
-          <SelectTrigger className="w-16">
-            <SelectValue />
+          <SelectTrigger className="w-[70px] h-8">
+            <SelectValue placeholder={emailsPerPage} />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="5">5</SelectItem>
             <SelectItem value="10">10</SelectItem>
+            <SelectItem value="15">15</SelectItem>
             <SelectItem value="25">25</SelectItem>
             <SelectItem value="50">50</SelectItem>
-            <SelectItem value="100">100</SelectItem>
           </SelectContent>
         </Select>
-
-        <div className="flex items-center space-x-1">
-          <Button variant="outline" size="sm" onClick={() => onPageChange(1)} disabled={currentPage === 1}>
-            <ChevronsLeft className="h-4 w-4" />
-            <span className="sr-only">First page</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Previous page</span>
-          </Button>
-
-          {getVisiblePages().map((page, index) => (
+        <span className="ml-4">
+          {totalEmails === 0 ? 0 : (currentPage - 1) * emailsPerPage + 1}-
+          {Math.min(currentPage * emailsPerPage, totalEmails)} of {totalEmails} emails
+        </span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="h-8 w-8"
+        >
+          <ChevronsLeft className="h-4 w-4" />
+          <span className="sr-only">First page</span>
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="h-8 w-8"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="sr-only">Previous page</span>
+        </Button>
+        {pageNumbers.map((page, index) =>
+          page === "..." ? (
+            <span key={index} className="h-8 w-8 flex items-center justify-center text-sm">
+              ...
+            </span>
+          ) : (
             <Button
-              key={index}
-              variant={page === currentPage ? "default" : "outline"}
-              size="sm"
-              onClick={() => typeof page === "number" && onPageChange(page)}
-              disabled={page === "..."}
-              className="min-w-[40px]"
+              key={page}
+              variant={currentPage === page ? "default" : "outline"}
+              size="icon"
+              onClick={() => onPageChange(page as number)}
+              className="h-8 w-8"
             >
               {page}
             </Button>
-          ))}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronRight className="h-4 w-4" />
-            <span className="sr-only">Next page</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronsRight className="h-4 w-4" />
-            <span className="sr-only">Last page</span>
-          </Button>
-        </div>
-
-        <span className="text-sm text-muted-foreground">
-          Page {currentPage} of {totalPages}
-        </span>
+          ),
+        )}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="h-8 w-8"
+        >
+          <ChevronRight className="h-4 w-4" />
+          <span className="sr-only">Next page</span>
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="h-8 w-8"
+        >
+          <ChevronsRight className="h-4 w-4" />
+          <span className="sr-only">Last page</span>
+        </Button>
       </div>
     </div>
   )
