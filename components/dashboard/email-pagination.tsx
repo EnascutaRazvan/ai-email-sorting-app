@@ -1,155 +1,96 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination"
 
 interface EmailPaginationProps {
   currentPage: number
-  totalPages: number
-  onPageChange: (page: number) => void
-  emailsPerPage: number
-  onEmailsPerPageChange: (value: string) => void
   totalEmails: number
+  emailsPerPage: number
+  onPageChange: (page: number) => void
 }
 
-export function EmailPagination({
-  currentPage,
-  totalPages,
-  onPageChange,
-  emailsPerPage,
-  onEmailsPerPageChange,
-  totalEmails,
-}: EmailPaginationProps) {
-  const startIndex = (currentPage - 1) * emailsPerPage + 1
-  const endIndex = Math.min(currentPage * emailsPerPage, totalEmails)
-
-  const getVisiblePages = () => {
-    const delta = 2
-    const range = []
-    const rangeWithDots = []
-
-    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
-      range.push(i)
-    }
-
-    if (currentPage - delta > 2) {
-      rangeWithDots.push(1, "...")
-    } else {
-      rangeWithDots.push(1)
-    }
-
-    rangeWithDots.push(...range)
-
-    if (currentPage + delta < totalPages - 1) {
-      rangeWithDots.push("...", totalPages)
-    } else if (totalPages > 1) {
-      rangeWithDots.push(totalPages)
-    }
-
-    return rangeWithDots
-  }
+export function EmailPagination({ currentPage, totalEmails, emailsPerPage, onPageChange }: EmailPaginationProps) {
+  const totalPages = Math.ceil(totalEmails / emailsPerPage)
 
   if (totalPages <= 1) {
-    return (
-      <div className="flex items-center justify-between px-4 py-3 border-t bg-background">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">
-            Showing {totalEmails} of {totalEmails} emails
-          </span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">Rows per page:</span>
-          <Select value={String(emailsPerPage)} onValueChange={onEmailsPerPageChange}>
-            <SelectTrigger className="w-16">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    )
+    return null // Don't show pagination if there's only one page or no emails
   }
 
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = []
+    const maxPagesToShow = 5 // Number of page links to show directly
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      // Always show first page
+      pages.push(1)
+
+      // Determine if ellipsis is needed at the start
+      if (currentPage > Math.floor(maxPagesToShow / 2) + 1) {
+        pages.push("ellipsis")
+      }
+
+      // Show pages around the current page
+      let startPage = Math.max(2, currentPage - Math.floor(maxPagesToShow / 2) + 1)
+      let endPage = Math.min(totalPages - 1, currentPage + Math.floor(maxPagesToShow / 2) - 1)
+
+      if (currentPage <= Math.floor(maxPagesToShow / 2) + 1) {
+        endPage = maxPagesToShow - 1
+      } else if (currentPage >= totalPages - Math.floor(maxPagesToShow / 2)) {
+        startPage = totalPages - maxPagesToShow + 2
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+
+      // Determine if ellipsis is needed at the end
+      if (currentPage < totalPages - Math.floor(maxPagesToShow / 2)) {
+        pages.push("ellipsis")
+      }
+
+      // Always show last page
+      if (!pages.includes(totalPages)) {
+        pages.push(totalPages)
+      }
+    }
+    return pages
+  }
+
+  const pageNumbers = getPageNumbers()
+
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t bg-background">
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-muted-foreground">
-          Showing {startIndex} to {endIndex} of {totalEmails} emails
-        </span>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-muted-foreground">Rows per page:</span>
-        <Select value={String(emailsPerPage)} onValueChange={onEmailsPerPageChange}>
-          <SelectTrigger className="w-16">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="10">10</SelectItem>
-            <SelectItem value="25">25</SelectItem>
-            <SelectItem value="50">50</SelectItem>
-            <SelectItem value="100">100</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="flex items-center space-x-1">
-          <Button variant="outline" size="sm" onClick={() => onPageChange(1)} disabled={currentPage === 1}>
-            <ChevronsLeft className="h-4 w-4" />
-            <span className="sr-only">First page</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Previous page</span>
-          </Button>
-
-          {getVisiblePages().map((page, index) => (
-            <Button
-              key={index}
-              variant={page === currentPage ? "default" : "outline"}
-              size="sm"
-              onClick={() => typeof page === "number" && onPageChange(page)}
-              disabled={page === "..."}
-              className="min-w-[40px]"
-            >
-              {page}
-            </Button>
-          ))}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronRight className="h-4 w-4" />
-            <span className="sr-only">Next page</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-          >
-            <ChevronsRight className="h-4 w-4" />
-            <span className="sr-only">Last page</span>
-          </Button>
-        </div>
-
-        <span className="text-sm text-muted-foreground">
-          Page {currentPage} of {totalPages}
-        </span>
-      </div>
-    </div>
+    <Pagination>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} />
+        </PaginationItem>
+        {pageNumbers.map((page, index) => (
+          <PaginationItem key={index}>
+            {page === "ellipsis" ? (
+              <PaginationEllipsis />
+            ) : (
+              <PaginationLink isActive={page === currentPage} onClick={() => onPageChange(page as number)}>
+                {page}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   )
 }

@@ -20,17 +20,32 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get("dateTo")
     const sender = searchParams.get("sender")
     const search = searchParams.get("search")
+    const isRead = searchParams.get("isRead")
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const offset = (page - 1) * limit
+    const sortBy = searchParams.get("sortBy") || "received_at"
+    const sortOrder = searchParams.get("sortOrder") || "desc"
 
     let query = supabase
       .from("emails")
-      .select(`
-        *,
+      .select(
+        `
+        id,
+        subject,
+        sender,
+        sender_email,
+        snippet,
+        received_at,
+        is_read,
+        category_id,
+        account_id,
         categories(id, name, color),
         user_accounts(email, name)
-      `)
+      `,
+        { count: "exact" },
+      )
       .eq("user_id", session.user.id)
-      .order("received_at", { ascending: false })
-      .limit(100)
 
     // Apply filters
     if (categoryId && categoryId !== "all") {
@@ -41,7 +56,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (accountId) {
+    if (accountId && accountId !== "all") {
       query = query.eq("account_id", accountId)
     }
 
@@ -63,7 +78,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const { data: emails, error } = await query
+    if (isRead !== null && isRead !== "all") {
+      query = query.eq("is_read", isRead === "true")
+    }
+
+    // Apply sorting
+    query = query.order(sortBy, { ascending: sortOrder === "asc" })
+
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: emails, error, count } = await query
 
     if (error) {
       console.error("Error fetching emails:", error)
@@ -88,7 +113,7 @@ export async function GET(request: NextRequest) {
         : null,
     }))
 
-    return NextResponse.json({ success: true, emails: transformedEmails })
+    return NextResponse.json({ success: true, emails: transformedEmails, totalCount: count })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
