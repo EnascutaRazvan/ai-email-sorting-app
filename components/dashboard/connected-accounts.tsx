@@ -9,7 +9,21 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import {
+  Mail,
+  CheckCircle,
+  Trash2,
+  AlertCircle,
+  Shield,
+  User,
+  Clock,
+  Zap,
+  ChevronDown,
+  Info,
+  Settings,
+} from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
 import { EmailImportButton } from "./email-import-button"
@@ -27,15 +41,27 @@ interface ConnectedAccount {
   last_sync?: string
 }
 
+interface UserSettings {
+  auto_sync_enabled: boolean
+  emails_per_page: number
+}
+
 export function ConnectedAccounts() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isInfoExpanded, setIsInfoExpanded] = useState(false)
+  const [isSettingsExpanded, setIsSettingsExpanded] = useState(false)
+  const [settings, setSettings] = useState<UserSettings>({
+    auto_sync_enabled: true,
+    emails_per_page: 10,
+  })
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false)
 
   useEffect(() => {
     fetchConnectedAccounts()
+    fetchUserSettings()
   }, [session])
 
   useEffect(() => {
@@ -110,6 +136,45 @@ export function ConnectedAccounts() {
     }
   }
 
+  const fetchUserSettings = async () => {
+    if (!session?.user?.id) return
+
+    try {
+      const response = await fetch("/api/settings")
+      if (response.ok) {
+        const data = await response.json()
+        setSettings(data.settings)
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error)
+    }
+  }
+
+  const updateUserSettings = async (newSettings: Partial<UserSettings>) => {
+    setIsUpdatingSettings(true)
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newSettings),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings(data.settings)
+        showSuccessToast("Settings Updated", "Your preferences have been saved")
+      } else {
+        throw new Error("Failed to update settings")
+      }
+    } catch (error) {
+      showErrorToast(error, "Updating Settings")
+    } finally {
+      setIsUpdatingSettings(false)
+    }
+  }
+
   const handleRemoveAccount = async (accountId: string, email: string, isPrimary: boolean) => {
     if (isPrimary) {
       showErrorToast("Cannot remove primary account", "Primary Account")
@@ -159,14 +224,14 @@ export function ConnectedAccounts() {
 
     if (diffMinutes < 30) {
       return {
-        text: "Recently synced",
+        text: `Last synced on ${lastSync.toLocaleDateString()} at ${lastSync.toLocaleTimeString()}`,
         color: "text-green-600",
         bgColor: "bg-green-100",
         icon: CheckCircle,
       }
     } else if (diffMinutes < 60) {
       return {
-        text: `${diffMinutes}m ago`,
+        text: `Last synced ${diffMinutes}m ago`,
         color: "text-blue-600",
         bgColor: "bg-blue-100",
         icon: Clock,
@@ -175,7 +240,7 @@ export function ConnectedAccounts() {
       const diffHours = Math.floor(diffMinutes / 60)
       if (diffHours < 24) {
         return {
-          text: `${diffHours}h ago`,
+          text: `Last synced ${diffHours}h ago`,
           color: "text-amber-600",
           bgColor: "bg-amber-100",
           icon: Clock,
@@ -183,7 +248,7 @@ export function ConnectedAccounts() {
       } else {
         const diffDays = Math.floor(diffHours / 24)
         return {
-          text: `${diffDays}d ago`,
+          text: `Last synced ${diffDays}d ago`,
           color: "text-red-600",
           bgColor: "bg-red-100",
           icon: AlertCircle,
@@ -235,21 +300,56 @@ export function ConnectedAccounts() {
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-xs">
                 <p className="text-xs">
-                  Emails are automatically imported every 15 minutes. Secured with Google OAuth 2.0 - your credentials
-                  are never stored.
+                  Emails are automatically imported based on your sync settings. Secured with Google OAuth 2.0.
                 </p>
               </TooltipContent>
             </Tooltip>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Settings Section */}
+          <Collapsible open={isSettingsExpanded} onOpenChange={setIsSettingsExpanded}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
+                <div className="flex items-center">
+                  <Settings className="h-3 w-3 mr-1" />
+                  Sync Settings
+                </div>
+                <ChevronDown className={cn("h-3 w-3 transition-transform", isSettingsExpanded && "rotate-180")} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-2">
+              <div className="bg-blue-50/50 rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="h-4 w-4 text-blue-600" />
+                    <Label htmlFor="auto-sync" className="text-sm font-medium">
+                      Auto-sync emails
+                    </Label>
+                  </div>
+                  <Switch
+                    id="auto-sync"
+                    checked={settings.auto_sync_enabled}
+                    onCheckedChange={(checked) => updateUserSettings({ auto_sync_enabled: checked })}
+                    disabled={isUpdatingSettings}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 ml-6">
+                  {settings.auto_sync_enabled
+                    ? "Emails are imported automatically every 15 minutes"
+                    : "Manual import only - automatic sync is disabled"}
+                </p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Collapsible Info Section */}
           <Collapsible open={isInfoExpanded} onOpenChange={setIsInfoExpanded}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-full justify-between text-xs text-gray-600 h-8">
                 <div className="flex items-center">
                   <Shield className="h-3 w-3 mr-1" />
-                  Security & Auto-sync Info
+                  Security & Features
                 </div>
                 <ChevronDown className={cn("h-3 w-3 transition-transform", isInfoExpanded && "rotate-180")} />
               </Button>
@@ -257,16 +357,16 @@ export function ConnectedAccounts() {
             <CollapsibleContent className="space-y-2 pt-2">
               <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
                 <div className="flex items-center">
-                  <Zap className="h-3 w-3 text-blue-600 mr-1" />
-                  <span className="font-medium">Auto-sync:</span> New emails imported every 15 minutes
-                </div>
-                <div className="flex items-center">
                   <Shield className="h-3 w-3 text-green-600 mr-1" />
                   <span className="font-medium">Security:</span> Google OAuth 2.0 - credentials never stored
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-3 w-3 text-purple-600 mr-1" />
                   <span className="font-medium">AI Processing:</span> Automatic categorization and summarization
+                </div>
+                <div className="flex items-center">
+                  <Mail className="h-3 w-3 text-blue-600 mr-1" />
+                  <span className="font-medium">Archive:</span> Imported emails are archived in Gmail
                 </div>
               </div>
             </CollapsibleContent>
@@ -340,13 +440,11 @@ export function ConnectedAccounts() {
                             <TooltipTrigger>
                               <div className={`flex items-center text-xs ${syncInfo.color}`}>
                                 <SyncIcon className="h-3 w-3 mr-1" />
-                                {syncInfo.text}
+                                {account.last_sync ? "Synced" : "Never synced"}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>
-                                Last sync: {account.last_sync ? new Date(account.last_sync).toLocaleString() : "Never"}
-                              </p>
+                              <p className="text-xs max-w-xs">{syncInfo.text}</p>
                             </TooltipContent>
                           </Tooltip>
                         </div>

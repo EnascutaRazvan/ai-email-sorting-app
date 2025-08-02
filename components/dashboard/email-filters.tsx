@@ -23,11 +23,12 @@ interface EmailFiltersProps {
 
 export interface EmailFilters {
   search: string
-  categoryId: string | null
+  categoryIds: string[]
   accountId: string | null
   dateFrom: Date | null
   dateTo: Date | null
   sender: string
+  senderEmail: string
 }
 
 export function EmailFilters({
@@ -40,11 +41,12 @@ export function EmailFilters({
   const [isOpen, setIsOpen] = useState(false)
   const [filters, setFilters] = useState<EmailFilters>({
     search: "",
-    categoryId: "all", // Updated default value
-    accountId: "all", // Updated default value
+    categoryIds: [],
+    accountId: null,
     dateFrom: null,
     dateTo: null,
     sender: "",
+    senderEmail: "",
   })
 
   const updateFilters = (newFilters: Partial<EmailFilters>) => {
@@ -56,11 +58,12 @@ export function EmailFilters({
   const clearFilters = () => {
     const clearedFilters: EmailFilters = {
       search: "",
-      categoryId: "all", // Updated default value
-      accountId: "all", // Updated default value
+      categoryIds: [],
+      accountId: null,
       dateFrom: null,
       dateTo: null,
       sender: "",
+      senderEmail: "",
     }
     setFilters(clearedFilters)
     onFiltersChange(clearedFilters)
@@ -69,10 +72,11 @@ export function EmailFilters({
   const getActiveFiltersCount = () => {
     let count = 0
     if (filters.search) count++
-    if (filters.categoryId !== "all") count++
-    if (filters.accountId !== "all") count++
+    if (filters.categoryIds.length > 0) count++
+    if (filters.accountId) count++
     if (filters.dateFrom || filters.dateTo) count++
     if (filters.sender) count++
+    if (filters.senderEmail) count++
     return count
   }
 
@@ -83,7 +87,7 @@ export function EmailFilters({
       {/* Search Bar */}
       <div className="relative">
         <Input
-          placeholder="Search emails..."
+          placeholder="Search emails by subject, sender, or content..."
           value={filters.search}
           onChange={(e) => updateFilters({ search: e.target.value })}
           className="pl-4 pr-10"
@@ -106,7 +110,7 @@ export function EmailFilters({
           <CollapsibleTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
               <Filter className="h-4 w-4" />
-              Filters
+              Advanced Filters
               {activeFiltersCount > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">
                   {activeFiltersCount}
@@ -118,32 +122,13 @@ export function EmailFilters({
 
           <CollapsibleContent className="mt-4 space-y-4 rounded-lg border bg-card p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Category Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Category</Label>
-                <Select value={filters.categoryId} onValueChange={(value) => updateFilters({ categoryId: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
-                    <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                          {category.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Account Filter */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Account</Label>
-                <Select value={filters.accountId} onValueChange={(value) => updateFilters({ accountId: value })}>
+                <Select
+                  value={filters.accountId || "all"}
+                  onValueChange={(value) => updateFilters({ accountId: value === "all" ? null : value })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="All accounts" />
                   </SelectTrigger>
@@ -158,13 +143,23 @@ export function EmailFilters({
                 </Select>
               </div>
 
-              {/* Sender Filter */}
+              {/* Sender Name Filter */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Sender</Label>
+                <Label className="text-sm font-medium">Sender Name</Label>
                 <Input
-                  placeholder="Filter by sender..."
+                  placeholder="Filter by sender name..."
                   value={filters.sender}
                   onChange={(e) => updateFilters({ sender: e.target.value })}
+                />
+              </div>
+
+              {/* Sender Email Filter */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Sender Email</Label>
+                <Input
+                  placeholder="Filter by sender email..."
+                  value={filters.senderEmail}
+                  onChange={(e) => updateFilters({ senderEmail: e.target.value })}
                 />
               </div>
 
@@ -253,25 +248,28 @@ export function EmailFilters({
               <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ search: "" })} />
             </Badge>
           )}
-          {filters.categoryId !== "all" && (
+          {filters.categoryIds.length > 0 && (
             <Badge variant="secondary" className="flex items-center gap-1">
-              Category:{" "}
-              {filters.categoryId === "uncategorized"
-                ? "Uncategorized"
-                : categories.find((c) => c.id === filters.categoryId)?.name}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ categoryId: "all" })} />
+              Categories: {filters.categoryIds.length} selected
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ categoryIds: [] })} />
             </Badge>
           )}
-          {filters.accountId !== "all" && (
+          {filters.accountId && (
             <Badge variant="secondary" className="flex items-center gap-1">
               Account: {accounts.find((a) => a.id === filters.accountId)?.email}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ accountId: "all" })} />
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ accountId: null })} />
             </Badge>
           )}
           {filters.sender && (
             <Badge variant="secondary" className="flex items-center gap-1">
               Sender: {filters.sender}
               <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ sender: "" })} />
+            </Badge>
+          )}
+          {filters.senderEmail && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              Email: {filters.senderEmail}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => updateFilters({ senderEmail: "" })} />
             </Badge>
           )}
           {(filters.dateFrom || filters.dateTo) && (

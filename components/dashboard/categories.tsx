@@ -12,12 +12,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Folder, Trash2, FolderOpen } from "lucide-react"
+import { Plus, Folder, Trash2, FolderOpen, Settings, Sparkles } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 
 interface Category {
@@ -26,20 +32,22 @@ interface Category {
   description: string
   color: string
   email_count: number
+  is_default: boolean
 }
 
 interface CategoriesProps {
-  selectedCategory: string | null
-  onCategorySelect: (categoryId: string | null) => void
+  selectedCategories: string[]
+  onCategorySelect: (categoryIds: string[]) => void
   onCategoriesChange?: () => void
 }
 
-export function Categories({ selectedCategory, onCategorySelect, onCategoriesChange }: CategoriesProps) {
+export function Categories({ selectedCategories, onCategorySelect, onCategoriesChange }: CategoriesProps) {
   const { data: session } = useSession()
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [isCreatingDefaults, setIsCreatingDefaults] = useState(false)
   const [newCategory, setNewCategory] = useState({
     name: "",
     description: "",
@@ -103,10 +111,36 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
     }
   }
 
+  const handleCreateDefaultCategories = async () => {
+    setIsCreatingDefaults(true)
+    try {
+      const response = await fetch("/api/categories/default", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.created) {
+          showSuccessToast("Default Categories Created", "7 default categories have been created for you")
+          fetchCategories()
+        } else {
+          showSuccessToast("Categories Already Exist", "You already have categories set up")
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create default categories")
+      }
+    } catch (error) {
+      showErrorToast(error, "Creating Default Categories")
+    } finally {
+      setIsCreatingDefaults(false)
+    }
+  }
+
   const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
     if (
       !confirm(
-        `Are you sure you want to delete "${categoryName}"? This action cannot be undone and will uncategorize all emails in this category.`,
+        `Are you sure you want to delete "${categoryName}"? This action cannot be undone and will remove this category from all emails.`,
       )
     ) {
       return
@@ -119,9 +153,9 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
 
       if (response.ok) {
         setCategories(categories.filter((cat) => cat.id !== categoryId))
-        if (selectedCategory === categoryId) {
-          onCategorySelect(null)
-        }
+        // Remove from selected categories if it was selected
+        const updatedSelected = selectedCategories.filter((id) => id !== categoryId)
+        onCategorySelect(updatedSelected)
         showSuccessToast("Category Deleted", `"${categoryName}" has been deleted`)
         onCategoriesChange?.()
       } else {
@@ -130,6 +164,15 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
       }
     } catch (error) {
       showErrorToast(error, "Deleting Category")
+    }
+  }
+
+  const handleCategoryToggle = (categoryId: string) => {
+    const isSelected = selectedCategories.includes(categoryId)
+    if (isSelected) {
+      onCategorySelect(selectedCategories.filter((id) => id !== categoryId))
+    } else {
+      onCategorySelect([...selectedCategories, categoryId])
     }
   }
 
@@ -157,60 +200,100 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
   return (
     <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-          <Folder className="mr-2 h-4 w-4 text-blue-600" />
-          Categories
-          <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
-            {categories.length}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {/* <Button
-          onClick={() => onCategorySelect(null)}
-          variant={selectedCategory === null ? "default" : "ghost"}
-          className="w-full justify-start"
-          size="sm"
-        >
-          <FolderOpen className="mr-2 h-4 w-4" />
-          All Emails
-          <Badge variant="secondary" className="ml-auto">
-            {getTotalEmailCount()}
-          </Badge>
-        </Button> */}
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
+            <Folder className="mr-2 h-4 w-4 text-blue-600" />
+            Categories
+            <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+              {categories.length}
+            </Badge>
+          </CardTitle>
 
-        {categories.map((category) => (
-          <div key={category.id} className="group relative">
-            <Button
-              onClick={() => onCategorySelect(category.id)}
-              variant={selectedCategory === category.id ? "default" : "ghost"}
-              className="w-full justify-start pr-8"
-              size="sm"
-            >
-              <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
-              {category.name}
-              <Badge variant="secondary" className="ml-auto">
-                {category.email_count}
-              </Badge>
-            </Button>
-            <Button
-              onClick={() => handleDeleteCategory(category.id, category.name)}
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="h-3 w-3" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Category
+              </DropdownMenuItem>
+              {categories.length === 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleCreateDefaultCategories} disabled={isCreatingDefaults}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {isCreatingDefaults ? "Creating..." : "Create Default Categories"}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-2">
+        {categories.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+              <Folder className="h-8 w-8 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Categories Yet</h3>
+            <p className="text-sm text-gray-600 mb-4 max-w-sm mx-auto">
+              Create categories to organize your emails automatically with AI
+            </p>
+            <Button onClick={handleCreateDefaultCategories} disabled={isCreatingDefaults} className="mb-2">
+              <Sparkles className="mr-2 h-4 w-4" />
+              {isCreatingDefaults ? "Creating..." : "Create Default Categories"}
             </Button>
           </div>
-        ))}
+        ) : (
+          <>
+            <Button
+              onClick={() => onCategorySelect([])}
+              variant={selectedCategories.length === 0 ? "default" : "ghost"}
+              className="w-full justify-start"
+              size="sm"
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              All Emails
+              <Badge variant="secondary" className="ml-auto">
+                {getTotalEmailCount()}
+              </Badge>
+            </Button>
+
+            {categories.map((category) => (
+              <div key={category.id} className="group relative">
+                <Button
+                  onClick={() => handleCategoryToggle(category.id)}
+                  variant={selectedCategories.includes(category.id) ? "default" : "ghost"}
+                  className="w-full justify-start pr-8"
+                  size="sm"
+                >
+                  <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: category.color }} />
+                  {category.name}
+                  <Badge variant="secondary" className="ml-auto">
+                    {category.email_count}
+                  </Badge>
+                </Button>
+                {!category.is_default && (
+                  <Button
+                    onClick={() => handleDeleteCategory(category.id, category.name)}
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </>
+        )}
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-transparent" size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Category
-            </Button>
-          </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] bg-white">
             <DialogHeader>
               <DialogTitle className="text-gray-900">Create New Category</DialogTitle>

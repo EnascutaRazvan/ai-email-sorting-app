@@ -22,7 +22,7 @@ interface Category {
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
@@ -108,8 +108,8 @@ export default function DashboardPage() {
         <div className="lg:col-span-1 space-y-6">
           <ConnectedAccounts />
           <Categories
-            selectedCategory={selectedCategory}
-            onCategorySelect={setSelectedCategory}
+            selectedCategories={selectedCategories}
+            onCategorySelect={setSelectedCategories}
             onCategoriesChange={handleCategoriesChange}
           />
         </div>
@@ -118,7 +118,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-3">
           <EmailList
             key={refreshKey}
-            selectedCategory={selectedCategory}
+            selectedCategories={selectedCategories}
             accounts={accounts}
             categories={categories}
             onEmailsChange={handleEmailsChange}
