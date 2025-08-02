@@ -1,37 +1,38 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { neon } from "@neondatabase/serverless"
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-  }
-
-  const { emailIds } = await request.json()
-
-  if (!Array.isArray(emailIds) || emailIds.length === 0) {
-    return NextResponse.json({ message: "No email IDs provided" }, { status: 400 })
-  }
-
-  const sql = neon(process.env.DATABASE_URL!)
-
+export async function POST(request: NextRequest) {
   try {
-    // Delete emails belonging to the current user
-    const deletedEmails = await sql`
-      DELETE FROM emails
-      WHERE id IN (${sql(emailIds)}) AND user_id = ${session.user.id}
-      RETURNING id;
-    `
+    const session = await getServerSession(authOptions)
 
-    return NextResponse.json({
-      message: `Successfully deleted ${deletedEmails.length} emails.`,
-      deletedCount: deletedEmails.length,
-    })
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { emailIds } = await request.json()
+
+    if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+      return NextResponse.json({ error: "Invalid email IDs provided" }, { status: 400 })
+    }
+
+    const { error: deleteError } = await supabase
+      .from("emails")
+      .delete()
+      .in("id", emailIds)
+      .eq("user_id", session.user.id)
+
+    if (deleteError) {
+      console.error("Error deleting emails:", deleteError)
+      return NextResponse.json({ error: "Failed to delete emails" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, deletedCount: emailIds.length })
   } catch (error) {
-    console.error("Error deleting emails:", error)
-    return NextResponse.json({ message: "Failed to delete emails", error: error.message }, { status: 500 })
+    console.error("API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
