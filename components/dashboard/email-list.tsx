@@ -12,6 +12,7 @@ import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot } from "
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Email {
   id: string
@@ -60,6 +61,10 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
     dateTo: null,
     sender: "",
   })
+
+  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<string>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isUnsubscribing, setIsUnsubscribing] = useState(false)
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -190,6 +195,87 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
     }
   }
 
+  const handleSelectEmail = (emailId: string, isChecked: boolean) => {
+    setSelectedEmailIds((prev) => {
+      const newSet = new Set(prev)
+      if (isChecked) {
+        newSet.add(emailId)
+      } else {
+        newSet.delete(emailId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (isChecked: boolean) => {
+    if (isChecked) {
+      const allIds = new Set(filteredEmails.map((email) => email.id))
+      setSelectedEmailIds(allIds)
+    } else {
+      setSelectedEmailIds(new Set())
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedEmailIds.size === 0) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch("/api/emails/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds: Array.from(selectedEmailIds) }),
+      })
+
+      if (response.ok) {
+        showSuccessToast("Emails Deleted", `Successfully deleted ${selectedEmailIds.size} emails.`)
+        setSelectedEmailIds(new Set())
+        fetchEmailsWithFilters()
+        onEmailsChange?.()
+      } else {
+        throw new Error("Failed to delete emails")
+      }
+    } catch (error) {
+      showErrorToast(error, "Deleting Emails")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleUnsubscribeSelected = async () => {
+    if (selectedEmailIds.size === 0) return
+
+    setIsUnsubscribing(true)
+    try {
+      const response = await fetch("/api/emails/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds: Array.from(selectedEmailIds) }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        let successMessage = `Attempted to unsubscribe from ${selectedEmailIds.size} emails.`
+        if (result.unsubscribedLinks && result.unsubscribedLinks.length > 0) {
+          const linksFound = result.unsubscribedLinks.filter((item: any) => item.link).length
+          successMessage += ` Found unsubscribe links for ${linksFound} emails.`
+          // Optionally, you could display these links in a dialog for the user to manually visit
+          console.log("Unsubscribe links found:", result.unsubscribedLinks)
+        }
+        showSuccessToast("Unsubscribe Processed", successMessage)
+        setSelectedEmailIds(new Set())
+        fetchEmailsWithFilters() // Refresh list in case of any status updates
+        onEmailsChange?.()
+      } else {
+        throw new Error("Failed to process unsubscribe requests")
+      }
+    } catch (error) {
+      showErrorToast(error, "Unsubscribing from Emails")
+    } finally {
+      setIsUnsubscribing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full">
@@ -236,6 +322,38 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
             onRecategorize={handleRecategorizeEmails}
             isRecategorizing={isRecategorizing}
           />
+          {/* Inside CardHeader, after EmailFilters */}
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="selectAll"
+                checked={selectedEmailIds.size === filteredEmails.length && filteredEmails.length > 0}
+                onCheckedChange={handleSelectAll}
+                disabled={filteredEmails.length === 0}
+              />
+              <label htmlFor="selectAll" className="text-sm font-medium text-gray-700">
+                Select All ({selectedEmailIds.size})
+              </label>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteSelected}
+                disabled={selectedEmailIds.size === 0 || isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Delete Selected"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUnsubscribeSelected}
+                disabled={selectedEmailIds.size === 0 || isUnsubscribing}
+              >
+                {isUnsubscribing ? "Processing..." : "Unsubscribe Selected"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
 
         <CardContent className="flex-1 min-h-0 p-0">
@@ -256,119 +374,132 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                   <div
                     key={email.id}
                     onClick={() => handleEmailClick(email.id)}
-                    className={`group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
+                    className={`group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200 flex items-start ${
                       email.is_read
                         ? "bg-white/50 border-gray-200/50"
                         : "bg-gradient-to-r from-blue-50/50 to-white border-blue-200/50"
                     }`}
                   >
-                    <div className="flex items-start space-x-3">
-                      <Avatar className="h-10 w-10 flex-shrink-0">
-                        <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
-                        <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
-                          {getSenderInitials(email.sender)}
-                        </AvatarFallback>
-                      </Avatar>
+                    <div className="flex items-center pr-3">
+                      <Checkbox
+                        checked={selectedEmailIds.has(email.id)}
+                        onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
+                        onClick={(e) => e.stopPropagation()} // Prevent email click from triggering when checkbox is clicked
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Existing email content goes here */}
+                      <div className="flex items-start space-x-3">
+                        <Avatar className="h-10 w-10 flex-shrink-0">
+                          <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
+                          <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
+                            {getSenderInitials(email.sender)}
+                          </AvatarFallback>
+                        </Avatar>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center space-x-2 min-w-0 flex-1">
-                            <p
-                              className={`text-sm truncate ${email.is_read ? "text-gray-700" : "font-semibold text-gray-900"}`}
-                            >
-                              {getSenderName(email.sender)}
-                            </p>
-
-                            {/* Account Label */}
-                            {email.account && (
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
-                                    {email.account.email.split("@")[0]}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Account: {email.account.email}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-
-                            {/* Category Labels */}
-                            {email.category && (
-                              <Badge
-                                variant="secondary"
-                                style={{
-                                  backgroundColor: `${email.category.color}15`,
-                                  color: email.category.color,
-                                  borderColor: `${email.category.color}30`,
-                                }}
-                                className="text-xs border"
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              <p
+                                className={`text-sm truncate ${email.is_read ? "text-gray-700" : "font-semibold text-gray-900"}`}
                               >
-                                {email.category.name}
-                              </Badge>
-                            )}
+                                {getSenderName(email.sender)}
+                              </p>
 
-                            {/* AI Suggested Category */}
-                            {email.suggested_category && (
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge
-                                    variant="secondary"
-                                    style={{
-                                      backgroundColor: `${email.suggested_category.color}10`,
-                                      color: email.suggested_category.color,
-                                      borderColor: `${email.suggested_category.color}20`,
-                                    }}
-                                    className="text-xs border border-dashed flex items-center gap-1"
-                                  >
-                                    <Bot className="h-3 w-3" />
-                                    {email.suggested_category.name}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Suggested category by AI: {email.suggested_category.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
+                              {/* Account Label */}
+                              {email.account && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs bg-gray-50 text-gray-600 border-gray-300"
+                                    >
+                                      {email.account.email.split("@")[0]}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Account: {email.account.email}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
 
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <div className="flex items-center text-xs text-gray-500">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatDate(email.received_at)}
+                              {/* Category Labels */}
+                              {email.category && (
+                                <Badge
+                                  variant="secondary"
+                                  style={{
+                                    backgroundColor: `${email.category.color}15`,
+                                    color: email.category.color,
+                                    borderColor: `${email.category.color}30`,
+                                  }}
+                                  className="text-xs border"
+                                >
+                                  {email.category.name}
+                                </Badge>
+                              )}
+
+                              {/* AI Suggested Category */}
+                              {email.suggested_category && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <Badge
+                                      variant="secondary"
+                                      style={{
+                                        backgroundColor: `${email.suggested_category.color}10`,
+                                        color: email.suggested_category.color,
+                                        borderColor: `${email.suggested_category.color}20`,
+                                      }}
+                                      className="text-xs border border-dashed flex items-center gap-1"
+                                    >
+                                      <Bot className="h-3 w-3" />
+                                      {email.suggested_category.name}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Suggested category by AI: {email.suggested_category.name}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
-                            {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full"></div>}
-                          </div>
-                        </div>
 
-                        <h3
-                          className={`text-sm mb-2 line-clamp-1 ${email.is_read ? "text-gray-800" : "font-semibold text-gray-900"}`}
-                        >
-                          {email.subject}
-                        </h3>
-
-                        {/* AI Summary */}
-                        {email.ai_summary && (
-                          <div className="bg-gradient-to-r from-purple-50/50 to-blue-50/50 rounded-md p-2 mb-2 border border-purple-100/50">
-                            <div className="flex items-center mb-1">
-                              <Sparkles className="h-3 w-3 text-purple-600 mr-1" />
-                              <span className="text-xs font-medium text-purple-900">AI Summary</span>
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <div className="flex items-center text-xs text-gray-500">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatDate(email.received_at)}
+                              </div>
+                              {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full"></div>}
                             </div>
-                            <p className="text-xs text-purple-800 line-clamp-2 leading-relaxed">{email.ai_summary}</p>
                           </div>
-                        )}
 
-                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
+                          <h3
+                            className={`text-sm mb-2 line-clamp-1 ${email.is_read ? "text-gray-800" : "font-semibold text-gray-900"}`}
+                          >
+                            {email.subject}
+                          </h3>
 
-                        {/* Email metadata */}
-                        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                          <div className="flex items-center space-x-2">
-                            <User className="h-3 w-3" />
-                            <span className="truncate">{email.account?.email || "Unknown account"}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
-                            <Archive className="h-3 w-3" />
+                          {/* AI Summary */}
+                          {email.ai_summary && (
+                            <div className="bg-gradient-to-r from-purple-50/50 to-blue-50/50 rounded-md p-2 mb-2 border border-purple-100/50">
+                              <div className="flex items-center mb-1">
+                                <Sparkles className="h-3 w-3 text-purple-600 mr-1" />
+                                <span className="text-xs font-medium text-purple-900">AI Summary</span>
+                              </div>
+                              <p className="text-xs text-purple-800 line-clamp-2 leading-relaxed">{email.ai_summary}</p>
+                            </div>
+                          )}
+
+                          <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
+
+                          {/* Email metadata */}
+                          <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                            <div className="flex items-center space-x-2">
+                              <User className="h-3 w-3" />
+                              <span className="truncate">{email.account?.email || "Unknown account"}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+                              <Archive className="h-3 w-3" />
+                            </div>
                           </div>
                         </div>
                       </div>
