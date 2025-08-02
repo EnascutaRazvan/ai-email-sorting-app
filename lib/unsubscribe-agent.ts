@@ -1,5 +1,6 @@
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
+import puppeteer from "puppeteer"
 
 interface UnsubscribeLink {
   url: string
@@ -12,6 +13,7 @@ interface UnsubscribeResult {
   method: string
   error?: string
   details?: string
+  screenshot?: string
 }
 
 export class UnsubscribeAgent {
@@ -94,60 +96,172 @@ export class UnsubscribeAgent {
         }
       }
 
-      // For HTTP links, we'll simulate the process since we can't actually navigate
-      // In a real implementation, you'd use a headless browser like Puppeteer
-      const { text } = await generateText({
-        model: this.model,
-        prompt: `
-          You are an AI agent tasked with unsubscribing from an email list.
-          
-          Unsubscribe URL: ${link.url}
-          Link context: ${link.text}
-          
-          Based on the URL and context, determine the most likely unsubscribe method:
-          1. Simple GET request (just visiting the URL)
-          2. Form submission required
-          3. Email confirmation required
-          4. Account login required
-          
-          Respond with a JSON object:
-          {
-            "method": "GET|POST|EMAIL|LOGIN",
-            "confidence": 0.0-1.0,
-            "expectedSteps": "description of what steps would be needed",
-            "simulatedSuccess": true/false
-          }
-        `,
+      // Launch browser for actual web navigation
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process",
+          "--disable-gpu",
+        ],
       })
 
-      try {
-        const analysis = JSON.parse(text)
+      const page = await browser.newPage()
 
-        // Simulate the unsubscribe process
-        if (analysis.method === "GET" && analysis.confidence > 0.7) {
-          return {
-            success: true,
-            method: "GET",
-            details: `Successfully processed unsubscribe via GET request to ${link.url}`,
+      try {
+        // Set user agent to appear as a real browser
+        await page.setUserAgent(
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        )
+
+        // Navigate to the unsubscribe URL
+        await page.goto(link.url, { waitUntil: "networkidle2", timeout: 30000 })
+
+        // Take a screenshot for debugging
+        const screenshot = await page.screenshot({ encoding: "base64" })
+
+        // Get page content for AI analysis
+        const pageContent = await page.content()
+        const pageText = await page.evaluate(() => document.body.innerText)
+
+        // Use AI to analyze the page and determine next steps
+        const { text: analysisText } = await generateText({
+          model: this.model,
+          prompt: `
+            You are an AI agent helping to unsubscribe from an email list. 
+            
+            Page URL: ${link.url}
+            Page text content: ${pageText.substring(0, 2000)}
+            
+            Analyze this unsubscribe page and determine what actions need to be taken:
+            1. Is this a simple confirmation page that just needs a button click?
+            2. Does it require filling out a form?
+            3. Are there checkboxes or dropdowns to interact with?
+            4. Is there a CAPTCHA present?
+            5. Does it require email confirmation?
+            
+            Look for elements like:
+            - "Confirm unsubscribe" buttons
+            - "Unsubscribe" buttons
+            - Email input fields
+            - Reason dropdowns/checkboxes
+            - Submit buttons
+            
+            Respond with a JSON object:
+            {
+              "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
+              "elements": [
+                {
+                  "type": "button|input|select|checkbox",
+                  "selector": "CSS selector or text to find element",
+                  "action": "click|type|select",
+                  "value": "value to enter if needed"
+                }
+              ],
+              "confidence": 0.0-1.0,
+              "message": "description of what was found and what needs to be done"
+            }
+          `,
+        })
+
+        const analysis = JSON.parse(analysisText)
+
+        // Execute the determined actions
+        let success = false
+        let details = analysis.message
+
+        if (analysis.action === "ALREADY_UNSUBSCRIBED") {
+          success = true
+          details = "Already unsubscribed or email not found in list"
+        } else if (analysis.action === "CLICK_BUTTON" && analysis.elements.length > 0) {
+          // Try to find and click unsubscribe buttons
+          for (const element of analysis.elements) {
+            if (element.action === "click") {
+              try {
+                // Try different methods to find the element
+                let elementHandle = null
+
+                // Try by CSS selector first
+                try {
+                  elementHandle = await page.$(element.selector)
+                } catch {}
+
+                // If not found, try by text content
+                if (!elementHandle) {
+                  elementHandle = await page.evaluateHandle((text) => {
+                    const elements = Array.from(document.querySelectorAll('button, input[type="submit"], a'))
+                    return elements.find(
+                      (el) =>
+                        el.textContent?.toLowerCase().includes(text.toLowerCase()) ||
+                        el.getAttribute("value")?.toLowerCase().includes(text.toLowerCase()),
+                    )
+                  }, element.selector)
+                }
+
+                if (elementHandle) {
+                  await elementHandle.click()
+                  await page.waitForTimeout(2000) // Wait for any redirects
+                  success = true
+                  details = `Successfully clicked: ${element.selector}`
+                  break
+                }
+              } catch (error) {
+                console.error(`Error clicking element ${element.selector}:`, error)
+              }
+            }
           }
-        } else if (analysis.method === "EMAIL") {
-          return {
-            success: true,
-            method: "EMAIL",
-            details: `Email confirmation unsubscribe initiated for ${link.url}`,
+        } else if (analysis.action === "FILL_FORM" && analysis.elements.length > 0) {
+          // Handle form filling
+          for (const element of analysis.elements) {
+            try {
+              if (element.action === "type" && element.value) {
+                await page.type(element.selector, element.value)
+              } else if (element.action === "select" && element.value) {
+                await page.select(element.selector, element.value)
+              } else if (element.action === "click") {
+                await page.click(element.selector)
+              }
+            } catch (error) {
+              console.error(`Error interacting with element ${element.selector}:`, error)
+            }
           }
-        } else {
-          return {
-            success: false,
-            method: analysis.method,
-            error: `Complex unsubscribe process detected: ${analysis.expectedSteps}`,
+
+          // Try to submit the form
+          try {
+            await page.click('input[type="submit"], button[type="submit"], button:contains("unsubscribe")')
+            await page.waitForTimeout(3000)
+            success = true
+            details = "Form submitted successfully"
+          } catch (error) {
+            details = `Form filled but submission failed: ${error.message}`
           }
+        } else if (analysis.action === "CAPTCHA_REQUIRED") {
+          success = false
+          details = "CAPTCHA detected - manual intervention required"
+        } else if (analysis.action === "EMAIL_CONFIRMATION") {
+          success = true
+          details = "Email confirmation required - check email for confirmation link"
         }
-      } catch {
+
+        await browser.close()
+
+        return {
+          success,
+          method: analysis.action,
+          details,
+          screenshot: `data:image/png;base64,${screenshot}`,
+        }
+      } catch (error) {
+        await browser.close()
         return {
           success: false,
-          method: "UNKNOWN",
-          error: "Could not analyze unsubscribe method",
+          method: "ERROR",
+          error: `Navigation error: ${error.message}`,
         }
       }
     } catch (error) {
@@ -186,7 +300,7 @@ export class UnsubscribeAgent {
       }
 
       // Add delay between requests to be respectful
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 3000))
     }
 
     return {
