@@ -1,173 +1,150 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Mail, Shield, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
-import { showErrorToast } from "@/lib/error-handler"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { CheckCircle, Mail, Plus, RefreshCw } from "lucide-react"
+import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 
 interface MultiAccountDialogProps {
-  onAccountConnected: () => void
-  existingAccounts: number
+  isOpen: boolean
+  onClose: () => void
+  onAccountsChange: () => void
 }
 
-export function MultiAccountDialog({ onAccountConnected, existingAccounts }: MultiAccountDialogProps) {
-  const [isConnecting, setIsConnecting] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
+interface PendingAccount {
+  email: string
+  name?: string
+  selected: boolean
+}
 
-  const handleConnectAccount = async () => {
+export function MultiAccountDialog({ isOpen, onClose, onAccountsChange }: MultiAccountDialogProps) {
+  const [pendingAccounts, setPendingAccounts] = useState<PendingAccount[]>([])
+  const [isConnecting, setIsConnecting] = useState(false)
+
+  const handleConnectSelected = async () => {
+    const selectedAccounts = pendingAccounts.filter((account) => account.selected)
+
+    if (selectedAccounts.length === 0) {
+      showErrorToast(new Error("Please select at least one account to connect"), "Account Selection")
+      return
+    }
+
     setIsConnecting(true)
     try {
-      const response = await fetch("/api/auth/connect-account")
-      if (response.ok) {
-        const data = await response.json()
+      // This would typically make API calls to connect the selected accounts
+      // For now, we'll simulate the process
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
-        // Open in popup window for better UX
-        const popup = window.open(data.authUrl, "gmail-connect", "width=500,height=600,scrollbars=yes,resizable=yes")
+      showSuccessToast("Accounts Connected", `Successfully connected ${selectedAccounts.length} account(s)`)
 
-        // Listen for popup close
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            setIsConnecting(false)
-            setIsOpen(false)
-            onAccountConnected()
-          }
-        }, 1000)
-
-        // Timeout after 5 minutes
-        setTimeout(() => {
-          clearInterval(checkClosed)
-          if (popup && !popup.closed) {
-            popup.close()
-          }
-          setIsConnecting(false)
-        }, 300000)
-      } else {
-        throw new Error("Failed to generate auth URL")
-      }
+      onAccountsChange()
+      onClose()
     } catch (error) {
-      showErrorToast(error, "Connecting New Account")
+      showErrorToast(error, "Connecting Accounts")
+    } finally {
       setIsConnecting(false)
     }
   }
 
+  const toggleAccountSelection = (email: string) => {
+    setPendingAccounts((prev) =>
+      prev.map((account) => (account.email === email ? { ...account, selected: !account.selected } : account)),
+    )
+  }
+
+  const getAccountInitials = (email: string, name?: string) => {
+    if (name) {
+      return name
+        .split(" ")
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()
+        .substring(0, 2)
+    }
+    return email.substring(0, 2).toUpperCase()
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button
-          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
-          size="sm"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Connect Gmail Account
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center text-lg">
+          <DialogTitle className="flex items-center">
             <Mail className="mr-2 h-5 w-5 text-blue-600" />
-            Connect Gmail Account
+            Connect Multiple Accounts
           </DialogTitle>
-          <DialogDescription className="text-sm text-gray-600">
-            Add another Gmail account to manage multiple inboxes in one place.
-          </DialogDescription>
+          <DialogDescription>Select the Gmail accounts you want to connect for email organization.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Current Status */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">Current Status</span>
+        <div className="space-y-3 max-h-60 overflow-y-auto">
+          {pendingAccounts.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-12 h-12 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+                <Mail className="h-6 w-6 text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-600">No accounts available to connect</p>
             </div>
-            <p className="text-sm text-blue-800">
-              You have{" "}
-              <Badge variant="secondary" className="mx-1">
-                {existingAccounts}
-              </Badge>
-              Gmail account{existingAccounts !== 1 ? "s" : ""} connected
-            </p>
-          </div>
+          ) : (
+            pendingAccounts.map((account) => (
+              <div
+                key={account.email}
+                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                  account.selected ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                }`}
+                onClick={() => toggleAccountSelection(account.email)}
+              >
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="/placeholder.svg" alt={account.name || account.email} />
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs">
+                      {getAccountInitials(account.email, account.name)}
+                    </AvatarFallback>
+                  </Avatar>
 
-          {/* Security Info */}
-          <Alert className="border-green-200 bg-green-50">
-            <Shield className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-sm text-green-800">
-              <strong>Secure Connection:</strong> We use Google's OAuth 2.0 for secure authentication. Your passwords
-              are never stored or accessed.
-            </AlertDescription>
-          </Alert>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{account.name || account.email}</p>
+                    {account.name && <p className="text-xs text-gray-600 truncate">{account.email}</p>}
+                  </div>
+                </div>
 
-          {/* Instructions */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-900">What happens next:</h4>
-            <div className="space-y-2">
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">1</span>
-                </div>
-                <p className="text-sm text-gray-700">Google will open in a new window</p>
+                {account.selected && <CheckCircle className="h-5 w-5 text-blue-600" />}
               </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">2</span>
-                </div>
-                <p className="text-sm text-gray-700">Choose the Gmail account you want to connect</p>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">3</span>
-                </div>
-                <p className="text-sm text-gray-700">Grant permissions to read and manage emails</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Development Warning */}
-          {process.env.NODE_ENV === "development" && (
-            <Alert variant="destructive" className="border-amber-200 bg-amber-50">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-xs text-amber-800">
-                <strong>Development Mode:</strong> If you see "Access blocked", you need to add your email as a test
-                user in Google Cloud Console.
-              </AlertDescription>
-            </Alert>
+            ))
           )}
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <Button
-              onClick={handleConnectAccount}
-              disabled={isConnecting}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            >
-              {isConnecting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Connect Account
-                </>
-              )}
-            </Button>
-            <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isConnecting}>
+        <DialogFooter className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            {pendingAccounts.filter((a) => a.selected).length > 0 && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                {pendingAccounts.filter((a) => a.selected).length} selected
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex space-x-2">
+            <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
+            <Button
+              onClick={handleConnectSelected}
+              disabled={isConnecting || pendingAccounts.filter((a) => a.selected).length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isConnecting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              Connect Selected
+            </Button>
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

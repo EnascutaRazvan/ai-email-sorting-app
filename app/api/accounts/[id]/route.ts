@@ -30,12 +30,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // First, update all emails from this account to mark them as from a disconnected account
-    // We'll set account_id to null and update a display field to show it was disconnected
+    // We'll set account_id to null and store the original account email for display purposes
     const { error: emailUpdateError } = await supabase
       .from("emails")
       .update({
         account_id: null,
-        // Store the original account email for display purposes
         disconnected_account_email: account.email,
       })
       .eq("account_id", params.id)
@@ -43,7 +42,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     if (emailUpdateError) {
       console.error("Error updating emails for disconnected account:", emailUpdateError)
-      return NextResponse.json({ error: "Failed to update emails for account removal" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to update emails for account removal",
+          details: emailUpdateError.message,
+        },
+        { status: 500 },
+      )
     }
 
     // Now delete the account
@@ -54,7 +59,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Failed to delete account" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      message: "Account disconnected successfully. All emails have been preserved.",
+    })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

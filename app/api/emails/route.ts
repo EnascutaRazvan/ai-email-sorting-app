@@ -26,8 +26,7 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         categories(id, name, color),
-        user_accounts(email, name),
-        disconnected_account_email
+        user_accounts(email, name)
       `)
       .eq("user_id", session.user.id)
       .order("received_at", { ascending: false })
