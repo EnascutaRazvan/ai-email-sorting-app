@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { accountId, isScheduled = false, dateFrom, dateTo } = await request.json()
+    const { accountId, isScheduled = false } = await request.json()
 
     if (!accountId) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
@@ -46,25 +46,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    // Check if auto-sync is enabled for this user
-    const { data: userSettings } = await supabase
-      .from("user_settings")
-      .select("auto_sync_enabled")
-      .eq("user_id", session.user.id)
-      .single()
-
-    if (isScheduled && userSettings && !userSettings.auto_sync_enabled) {
-      return NextResponse.json({
-        success: true,
-        message: "Auto-sync is disabled for this user",
-        imported: 0,
-        processed: 0,
-      })
-    }
-
-    // Ensure uncategorized category exists
-    await ensureUncategorizedCategory(session.user.id)
-
     // Get user categories for AI categorization
     const { data: categories, error: categoriesError } = await supabase
       .from("categories")
@@ -76,8 +57,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 })
     }
 
-    // Build date query based on custom range or default logic
-    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled, dateFrom, dateTo)
+    // Determine the date range for fetching emails
+    const dateQuery = await buildDateQuery(accountId, session.user.id, isScheduled)
 
     // Fetch emails from Gmail API with date filtering
     const gmailQuery = `in:inbox -in:sent ${dateQuery}`
@@ -142,15 +123,14 @@ export async function POST(request: NextRequest) {
         const aiSummary = await generateEmailSummary(subject, from, emailBody)
 
         // Categorize email with AI using Groq
-        const categoryResult = await categorizeEmailWithAI(subject, from, emailBody, categories)
+        const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
 
         // Store email in database
         const { error: insertError } = await supabase.from("emails").insert({
           id: message.id,
           user_id: session.user.id,
           account_id: accountId,
-          category_id: categoryResult.categoryId,
-          suggested_category_id: categoryResult.suggestedCategoryId,
+          category_id: categoryId,
           subject,
           sender: from,
           snippet: message.snippet,
@@ -197,46 +177,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function ensureUncategorizedCategory(userId: string) {
-  const { data: existingCategory } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("name", "Uncategorized")
-    .single()
-
-  if (!existingCategory) {
-    await supabase.from("categories").insert({
-      user_id: userId,
-      name: "Uncategorized",
-      description: "Emails that haven't been categorized yet",
-      color: "#6B7280",
-    })
-  }
-}
-
-async function buildDateQuery(
-  accountId: string,
-  userId: string,
-  isScheduled: boolean,
-  customDateFrom?: string,
-  customDateTo?: string,
-): Promise<string> {
+async function buildDateQuery(accountId: string, userId: string, isScheduled: boolean): Promise<string> {
   try {
-    // If custom date range is provided, use it
-    if (customDateFrom || customDateTo) {
-      let query = ""
-      if (customDateFrom) {
-        const fromDate = new Date(customDateFrom).toISOString().split("T")[0].replace(/-/g, "/")
-        query += `after:${fromDate}`
-      }
-      if (customDateTo) {
-        const toDate = new Date(customDateTo).toISOString().split("T")[0].replace(/-/g, "/")
-        query += query ? ` before:${toDate}` : `before:${toDate}`
-      }
-      return query
-    }
-
     // Get the account's last sync time and creation time
     const { data: account } = await supabase
       .from("user_accounts")
@@ -313,10 +255,8 @@ async function categorizeEmailWithAI(
   from: string,
   body: string,
   categories: any[],
-): Promise<{ categoryId: string | null; suggestedCategoryId: string | null }> {
-  if (!categories.length) {
-    return { categoryId: null, suggestedCategoryId: null }
-  }
+): Promise<string | null> {
+  if (!categories.length) return null
 
   try {
     const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
@@ -343,23 +283,10 @@ Category:`,
         text.trim().toLowerCase().includes(cat.name.toLowerCase()),
     )
 
-    if (selectedCategory) {
-      // High confidence match - assign directly
-      return { categoryId: selectedCategory.id, suggestedCategoryId: null }
-    } else {
-      // No clear match - find uncategorized and suggest best match
-      const uncategorizedCategory = categories.find((cat) => cat.name === "Uncategorized")
-      const bestGuess = categories[0] // Could implement more sophisticated logic here
-
-      return {
-        categoryId: uncategorizedCategory?.id || null,
-        suggestedCategoryId: bestGuess?.id || null,
-      }
-    }
+    return selectedCategory?.id || null
   } catch (error) {
     console.error("Error categorizing email:", error)
-    const uncategorizedCategory = categories.find((cat) => cat.name === "Uncategorized")
-    return { categoryId: uncategorizedCategory?.id || null, suggestedCategoryId: null }
+    return null
   }
 }
 

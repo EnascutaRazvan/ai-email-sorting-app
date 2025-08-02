@@ -8,47 +8,41 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
-    const search = searchParams.get("search")
-    const category = searchParams.get("category")
-    const account = searchParams.get("account")
+    const categoryId = searchParams.get("category")
+    const accountId = searchParams.get("account")
     const dateFrom = searchParams.get("dateFrom")
     const dateTo = searchParams.get("dateTo")
     const sender = searchParams.get("sender")
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const search = searchParams.get("search")
 
     let query = supabase
       .from("emails")
       .select(`
         *,
-        category:categories(id, name, color),
-        suggested_category:categories!emails_suggested_category_id_fkey(id, name, color),
-        account:user_accounts(email, name)
+        categories(id, name, color),
+        user_accounts(email, name)
       `)
       .eq("user_id", session.user.id)
+      .order("received_at", { ascending: false })
+      .limit(100)
 
     // Apply filters
-    if (search) {
-      query = query.or(
-        `subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%,ai_summary.ilike.%${search}%`,
-      )
-    }
-
-    if (category && category !== "all") {
-      if (category === "uncategorized") {
+    if (categoryId && categoryId !== "all") {
+      if (categoryId === "uncategorized") {
         query = query.is("category_id", null)
       } else {
-        query = query.eq("category_id", category)
+        query = query.eq("category_id", categoryId)
       }
     }
 
-    if (account && account !== "all") {
-      query = query.eq("account_id", account)
+    if (accountId) {
+      query = query.eq("account_id", accountId)
     }
 
     if (dateFrom) {
@@ -63,15 +57,11 @@ export async function GET(request: NextRequest) {
       query = query.ilike("sender", `%${sender}%`)
     }
 
-    // Get total count for pagination
-    const { count } = await supabase
-      .from("emails")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", session.user.id)
-
-    // Apply pagination and ordering
-    const offset = (page - 1) * limit
-    query = query.order("received_at", { ascending: false }).range(offset, offset + limit - 1)
+    if (search) {
+      query = query.or(
+        `subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%,ai_summary.ilike.%${search}%`,
+      )
+    }
 
     const { data: emails, error } = await query
 
@@ -80,15 +70,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
     }
 
-    return NextResponse.json({
-      emails: emails || [],
-      pagination: {
-        page,
-        limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit),
-      },
-    })
+    // Transform the data to include account and category information
+    const transformedEmails = emails.map((email) => ({
+      ...email,
+      category: email.categories
+        ? {
+            id: email.categories.id,
+            name: email.categories.name,
+            color: email.categories.color,
+          }
+        : null,
+      account: email.user_accounts
+        ? {
+            email: email.user_accounts.email,
+            name: email.user_accounts.name,
+          }
+        : null,
+    }))
+
+    return NextResponse.json({ success: true, emails: transformedEmails })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { redirect } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { ConnectedAccounts } from "@/components/dashboard/connected-accounts"
-import { CategoriesDropdown } from "@/components/dashboard/categories-dropdown"
+import { Categories } from "@/components/dashboard/categories"
 import { EmailList } from "@/components/dashboard/email-list"
 
 interface Account {
@@ -91,11 +91,8 @@ export default function DashboardPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading your dashboard...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     )
   }
@@ -106,30 +103,26 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-8rem)]">
-            {/* Left Sidebar - Accounts and Categories */}
-            <div className="lg:col-span-1 space-y-6">
-              <ConnectedAccounts />
-              <CategoriesDropdown
-                selectedCategory={selectedCategory}
-                onCategorySelect={setSelectedCategory}
-                onCategoriesChange={handleCategoriesChange}
-              />
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+        {/* Left Sidebar - Accounts and Categories */}
+        <div className="lg:col-span-1 space-y-6">
+          <ConnectedAccounts />
+          <Categories
+            selectedCategory={selectedCategory}
+            onCategorySelect={setSelectedCategory}
+            onCategoriesChange={handleCategoriesChange}
+          />
+        </div>
 
-            {/* Main Content - Email List */}
-            <div className="lg:col-span-3">
-              <EmailList
-                key={refreshKey}
-                selectedCategory={selectedCategory}
-                accounts={accounts}
-                categories={categories}
-                onEmailsChange={handleEmailsChange}
-              />
-            </div>
-          </div>
+        {/* Main Content - Email List */}
+        <div className="lg:col-span-3">
+          <EmailList
+            key={refreshKey}
+            selectedCategory={selectedCategory}
+            accounts={accounts}
+            categories={categories}
+            onEmailsChange={handleEmailsChange}
+          />
         </div>
       </div>
     </DashboardLayout>
