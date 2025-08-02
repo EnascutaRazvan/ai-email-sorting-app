@@ -1,49 +1,59 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot, Trash2, UserX } from "lucide-react"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
-import { EmailDetailDialog } from "./email-detail-dialog"
-import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
-import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  ArrowDownUp,
+  Mail,
+  Search,
+  Filter,
+  Trash,
+  RefreshCcw,
+  UnlinkIcon as Unsubscribe,
+  Bot,
+  ChevronDown,
+  Eye,
+} from "lucide-react"
+import { EmailDetailDialog } from "./email-detail-dialog"
+import { useToast } from "@/components/ui/use-toast"
+import { EmailPagination } from "./email-pagination"
+import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format, parseISO } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Email {
   id: string
   subject: string
   sender: string
-  snippet: string
-  ai_summary: string
-  received_at: string
+  date: string
   is_read: boolean
-  category?: {
-    id: string
-    name: string
-    color: string
-  }
-  account?: {
-    email: string
-    name?: string
-  }
-  suggested_category?: {
-    id: string
-    name: string
-    color: string
-  }
+  category_id: string | null
+  category_name: string | null
+  category_color: string | null
+  account_email: string
+  is_ai_suggested?: boolean
 }
 
-interface EmailListProps {
-  selectedCategory: string | null
-  accounts: Array<{ id: string; email: string }>
-  categories: Array<{ id: string; name: string; color: string }>
-  onEmailsChange?: () => void
+interface Category {
+  id: string
+  name: string
+  color: string
 }
 
 interface UnsubscribeResult {
@@ -64,181 +74,113 @@ interface UnsubscribeResult {
   }>
 }
 
-export function EmailList({ selectedCategory, accounts, categories, onEmailsChange }: EmailListProps) {
-  const { data: session } = useSession()
-  const [emails, setEmails] = useState<Email[]>([])
-  const [filteredEmails, setFilteredEmails] = useState<Email[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
-  const [isRecategorizing, setIsRecategorizing] = useState(false)
-  const [filters, setFilters] = useState<EmailFiltersType>({
-    search: "",
-    categoryId: selectedCategory,
-    accountId: null,
-    dateFrom: null,
-    dateTo: null,
-    sender: "",
-  })
-
+export function EmailList({
+  initialEmails,
+  categories,
+  accounts,
+  onEmailDeleted,
+  onEmailCategorized,
+  onEmailsRecategorized,
+  onEmailsUnsubscribed,
+}: {
+  initialEmails: Email[]
+  categories: Category[]
+  accounts: { id: string; email: string }[]
+  onEmailDeleted: (emailIds: string[]) => void
+  onEmailCategorized: (emailId: string, categoryId: string | null) => void
+  onEmailsRecategorized: (updatedEmails: { id: string; category_id: string }[]) => void
+  onEmailsUnsubscribed: (unsubscribedEmailIds: string[]) => void
+}) {
+  const [emails, setEmails] = useState<Email[]>(initialEmails)
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isUnsubscribing, setIsUnsubscribing] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string | "all">("all")
+  const [selectedAccount, setSelectedAccount] = useState<string | "all">("all")
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc") // 'desc' for newest first
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [emailsPerPage, setEmailsPerPage] = useState(10)
+  const { toast } = useToast()
+  const [isUnsubscribeResultsDialogOpen, setIsUnsubscribeResultsDialogOpen] = useState(false)
   const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([])
-  const [showUnsubscribeResults, setShowUnsubscribeResults] = useState(false)
-  const [unsubscribeStats, setUnsubscribeStats] = useState({ processed: 0, successful: 0 })
+  const [totalProcessedUnsubscribes, setTotalProcessedUnsubscribes] = useState(0)
+  const [totalSuccessfulUnsubscribes, setTotalSuccessfulUnsubscribes] = useState(0)
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false)
+  const [isConfirmUnsubscribeOpen, setIsConfirmUnsubscribeOpen] = useState(false)
+
+  // Filter states
+  const [filterDateRange, setFilterDateRange] = useState<{ from?: Date; to?: Date }>({})
+  const [filterIsRead, setFilterIsRead] = useState<boolean | "all">("all")
+  const [filterHasAttachment, setFilterHasAttachment] = useState<boolean | "all">("all")
 
   useEffect(() => {
-    if (session?.user?.id) {
-      fetchEmails()
-    }
-  }, [session])
-
-  useEffect(() => {
-    setFilters((prev) => ({ ...prev, categoryId: selectedCategory }))
-  }, [selectedCategory])
-
-  useEffect(() => {
-    fetchEmailsWithFilters()
-  }, [filters])
-
-  const fetchEmails = async () => {
-    try {
-      const response = await fetch("/api/emails")
-      if (response.ok) {
-        const data = await response.json()
-        setEmails(data.emails || [])
-        setFilteredEmails(data.emails || [])
-      } else {
-        throw new Error("Failed to fetch emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "Fetching Emails")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fetchEmailsWithFilters = async () => {
-    if (!session?.user?.id) return
-
-    try {
-      const params = new URLSearchParams()
-
-      if (filters.search) params.append("search", filters.search)
-      if (filters.categoryId) params.append("category", filters.categoryId)
-      if (filters.accountId) params.append("account", filters.accountId)
-      if (filters.dateFrom) params.append("dateFrom", filters.dateFrom.toISOString())
-      if (filters.dateTo) params.append("dateTo", filters.dateTo.toISOString())
-      if (filters.sender) params.append("sender", filters.sender)
-
-      const response = await fetch(`/api/emails?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        setFilteredEmails(data.emails || [])
-      } else {
-        throw new Error("Failed to fetch filtered emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "Filtering Emails")
-    }
-  }
-
-  const handleRecategorizeEmails = async () => {
-    setIsRecategorizing(true)
-
-    try {
-      // Ensure uncategorized category exists
-      await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
-
-      // Get all email IDs for recategorization
-      const emailIds = filteredEmails.map((email) => email.id)
-
-      const response = await fetch("/api/emails/recategorize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        showSuccessToast("AI Recategorization Complete", `Updated ${data.updated} emails with AI suggestions`)
-        fetchEmailsWithFilters()
-        onEmailsChange?.()
-      } else {
-        throw new Error("Failed to recategorize emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "AI Recategorization")
-    } finally {
-      setIsRecategorizing(false)
-    }
-  }
-
-  const handleEmailClick = (emailId: string) => {
-    setSelectedEmailId(emailId)
-    setIsDetailDialogOpen(true)
-  }
-
-  const handleCloseDetailDialog = () => {
-    setIsDetailDialogOpen(false)
-    setSelectedEmailId(null)
-    fetchEmailsWithFilters()
-  }
-
-  const getSenderInitials = (sender: string) => {
-    const match = sender.match(/^([^<]+)/)
-    const name = match ? match[1].trim() : sender
-    return name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2)
-  }
-
-  const getSenderName = (sender: string) => {
-    const match = sender.match(/^([^<]+)/)
-    return match ? match[1].trim() : sender
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffTime = Math.abs(now.getTime() - date.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    if (diffDays === 1) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    } else if (diffDays <= 7) {
-      return date.toLocaleDateString([], { weekday: "short" })
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric" })
-    }
-  }
-
-  const handleSelectEmail = (emailId: string, checked: boolean) => {
-    const newSelected = new Set(selectedEmails)
-    if (checked) {
-      newSelected.add(emailId)
-    } else {
-      newSelected.delete(emailId)
-    }
-    setSelectedEmails(newSelected)
-  }
+    setEmails(initialEmails)
+    setSelectedEmails(new Set()) // Clear selection when emails change
+  }, [initialEmails])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedEmails(new Set(filteredEmails.map((email) => email.id)))
+      const allEmailIds = filteredEmails.map((email) => email.id)
+      setSelectedEmails(new Set(allEmailIds))
     } else {
       setSelectedEmails(new Set())
     }
   }
 
-  const handleBulkDelete = async () => {
+  const handleSelectEmail = (emailId: string, checked: boolean) => {
+    setSelectedEmails((prev) => {
+      const newSelection = new Set(prev)
+      if (checked) {
+        newSelection.add(emailId)
+      } else {
+        newSelection.delete(emailId)
+      }
+      return newSelection
+    })
+  }
+
+  const handleEmailClick = (email: Email) => {
+    setSelectedEmail(email)
+    setIsDetailDialogOpen(true)
+  }
+
+  const handleEmailDetailClose = () => {
+    setIsDetailDialogOpen(false)
+    setSelectedEmail(null)
+  }
+
+  const handleCategorize = async (emailId: string, categoryId: string | null) => {
+    try {
+      const response = await fetch(`/api/emails/${emailId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category_id: categoryId }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to categorize email")
+      }
+
+      setEmails((prev) => prev.map((email) => (email.id === emailId ? { ...email, category_id: categoryId } : email)))
+      onEmailCategorized(emailId, categoryId)
+      toast({
+        title: "Email Categorized",
+        description: `Email moved to ${categories.find((c) => c.id === categoryId)?.name || "Uncategorized"}.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to categorize email.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    setIsConfirmDeleteOpen(false)
     if (selectedEmails.size === 0) return
 
-    setIsDeleting(true)
     try {
       const response = await fetch("/api/emails/bulk-delete", {
         method: "POST",
@@ -246,25 +188,85 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
         body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
       })
 
-      if (response.ok) {
-        showSuccessToast("Emails Deleted", `Successfully deleted ${selectedEmails.size} emails`)
-        setSelectedEmails(new Set())
-        fetchEmailsWithFilters()
-        onEmailsChange?.()
-      } else {
+      if (!response.ok) {
         throw new Error("Failed to delete emails")
       }
-    } catch (error) {
-      showErrorToast(error, "Deleting Emails")
-    } finally {
-      setIsDeleting(false)
+
+      const deletedIds = Array.from(selectedEmails)
+      setEmails((prev) => prev.filter((email) => !selectedEmails.has(email.id)))
+      onEmailDeleted(deletedIds)
+      setSelectedEmails(new Set())
+      toast({
+        title: "Emails Deleted",
+        description: `${deletedIds.length} emails have been deleted.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete emails.",
+        variant: "destructive",
+      })
     }
   }
 
-  const handleBulkUnsubscribe = async () => {
+  const handleRecategorizeWithAI = async () => {
+    try {
+      toast({
+        title: "Recategorizing Emails",
+        description: "AI is working to recategorize your emails. This may take a moment.",
+      })
+
+      const response = await fetch("/api/emails/recategorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to recategorize emails with AI")
+      }
+
+      const { updatedEmails } = await response.json()
+      setEmails((prev) =>
+        prev.map((email) => {
+          const updated = updatedEmails.find((ue: { id: string }) => ue.id === email.id)
+          if (updated) {
+            const newCategory = categories.find((cat) => cat.id === updated.category_id)
+            return {
+              ...email,
+              category_id: updated.category_id,
+              category_name: newCategory?.name || null,
+              category_color: newCategory?.color || null,
+              is_ai_suggested: true, // Mark as AI suggested after recategorization
+            }
+          }
+          return email
+        }),
+      )
+      onEmailsRecategorized(updatedEmails)
+      setSelectedEmails(new Set())
+      toast({
+        title: "AI Recategorization Complete",
+        description: `${updatedEmails.length} emails have been recategorized by AI.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to recategorize emails with AI.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleUnsubscribeSelected = async () => {
+    setIsConfirmUnsubscribeOpen(false)
     if (selectedEmails.size === 0) return
 
-    setIsUnsubscribing(true)
+    toast({
+      title: "Unsubscribing from Emails",
+      description: "The AI agent is working to unsubscribe from selected emails. This may take a while.",
+    })
+
     try {
       const response = await fetch("/api/emails/bulk-unsubscribe", {
         method: "POST",
@@ -272,284 +274,415 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
         body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setUnsubscribeResults(data.results)
-        setUnsubscribeStats({ processed: data.processed, successful: data.successful })
-        setShowUnsubscribeResults(true)
-        setSelectedEmails(new Set())
-        fetchEmailsWithFilters()
-        showSuccessToast(
-          "Unsubscribe Complete",
-          `Processed ${data.processed} emails, ${data.successful} successful unsubscribes`,
-        )
-      } else {
-        throw new Error("Failed to process unsubscribe requests")
+      if (!response.ok) {
+        throw new Error("Failed to unsubscribe from emails")
       }
-    } catch (error) {
-      showErrorToast(error, "Bulk Unsubscribe")
-    } finally {
-      setIsUnsubscribing(false)
+
+      const { results, totalProcessed, totalSuccessful } = await response.json()
+      setUnsubscribeResults(results)
+      setTotalProcessedUnsubscribes(totalProcessed)
+      setTotalSuccessfulUnsubscribes(totalSuccessful)
+      setIsUnsubscribeResultsDialogOpen(true)
+
+      // Remove successfully unsubscribed emails from the list
+      const unsubscribedEmailIds = results
+        .filter((r: UnsubscribeResult) => r.success)
+        .map((r: UnsubscribeResult) => r.emailId)
+      setEmails((prev) => prev.filter((email) => !unsubscribedEmailIds.includes(email.id)))
+      onEmailsUnsubscribed(unsubscribedEmailIds)
+      setSelectedEmails(new Set())
+
+      toast({
+        title: "Unsubscribe Process Complete",
+        description: `Processed ${totalProcessed} emails, ${totalSuccessful} successful unsubscribes.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unsubscribe from emails.",
+        variant: "destructive",
+      })
     }
   }
 
-  if (isLoading) {
-    return (
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900">Emails</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading emails...</span>
-          </div>
-        </CardContent>
-      </Card>
-    )
+  const filteredEmails = useMemo(() => {
+    let filtered = emails
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (email) =>
+          email.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          email.sender.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    // Category filter
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter((email) => email.category_id === selectedCategory)
+    }
+
+    // Account filter
+    if (selectedAccount !== "all") {
+      filtered = filtered.filter((email) => email.account_email === selectedAccount)
+    }
+
+    // Date range filter
+    if (filterDateRange.from || filterDateRange.to) {
+      filtered = filtered.filter((email) => {
+        const emailDate = parseISO(email.date)
+        if (filterDateRange.from && emailDate < filterDateRange.from) {
+          return false
+        }
+        if (filterDateRange.to && emailDate > filterDateRange.to) {
+          return false
+        }
+        return true
+      })
+    }
+
+    // Is Read filter
+    if (filterIsRead !== "all") {
+      filtered = filtered.filter((email) => email.is_read === filterIsRead)
+    }
+
+    // Has Attachment filter (assuming emails have an `has_attachment` property, which is not in the current Email interface)
+    // For now, this filter will not do anything unless `has_attachment` is added to the Email type and data.
+    // if (filterHasAttachment !== "all") {
+    //   filtered = filtered.filter((email) => email.has_attachment === filterHasAttachment);
+    // }
+
+    // Sort
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+    })
+
+    return filtered
+  }, [
+    emails,
+    searchTerm,
+    selectedCategory,
+    selectedAccount,
+    sortOrder,
+    filterDateRange,
+    filterIsRead,
+    filterHasAttachment,
+  ])
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredEmails.length / emailsPerPage)
+  const paginatedEmails = useMemo(() => {
+    const startIndex = (currentPage - 1) * emailsPerPage
+    const endIndex = startIndex + emailsPerPage
+    return filteredEmails.slice(startIndex, endIndex)
+  }, [filteredEmails, currentPage, emailsPerPage])
+
+  useEffect(() => {
+    // Reset to first page if filters change
+    setCurrentPage(1)
+  }, [searchTerm, selectedCategory, selectedAccount, filterDateRange, filterIsRead, filterHasAttachment])
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page)
+  }, [])
+
+  const handleEmailsPerPageChange = useCallback((value: string) => {
+    setEmailsPerPage(Number(value))
+    setCurrentPage(1) // Reset to first page when items per page changes
+  }, [])
+
+  const getCategoryName = (categoryId: string | null) => {
+    if (!categoryId) return "Uncategorized"
+    return categories.find((c) => c.id === categoryId)?.name || "Unknown Category"
+  }
+
+  const getCategoryColor = (categoryId: string | null) => {
+    if (!categoryId) return "bg-gray-200 text-gray-800" // Default for Uncategorized
+    return categories.find((c) => c.id === categoryId)?.color || "bg-gray-200 text-gray-800"
   }
 
   return (
-    <TooltipProvider>
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full flex flex-col">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-              <Mail className="mr-2 h-4 w-4 text-blue-600" />
-              Emails
-              <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
-                {filteredEmails.length}
-              </Badge>
-              {selectedEmails.size > 0 && (
-                <Badge variant="default" className="ml-2 bg-blue-600 text-white text-xs">
-                  {selectedEmails.size} selected
-                </Badge>
-              )}
-            </CardTitle>
-            <div className="flex items-center space-x-2">
-              {selectedEmails.size > 0 && (
-                <>
-                  <Button
-                    onClick={handleBulkDelete}
-                    variant="outline"
-                    size="sm"
-                    disabled={isDeleting}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 bg-transparent"
-                  >
-                    {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    Delete
-                  </Button>
-                  <Button
-                    onClick={handleBulkUnsubscribe}
-                    variant="outline"
-                    size="sm"
-                    disabled={isUnsubscribing}
-                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 bg-transparent"
-                  >
-                    {isUnsubscribing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                    {isUnsubscribing ? "Processing..." : "Unsubscribe"}
-                  </Button>
-                </>
-              )}
-              <Button
-                onClick={fetchEmailsWithFilters}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Bulk Selection Controls */}
-          {filteredEmails.length > 0 && (
-            <div className="flex items-center space-x-2 pt-2">
-              <Checkbox
-                checked={selectedEmails.size === filteredEmails.length}
-                onCheckedChange={handleSelectAll}
-                className="data-[state=checked]:bg-blue-600"
-              />
-              <span className="text-sm text-gray-600">Select all ({filteredEmails.length} emails)</span>
-            </div>
-          )}
-
-          {/* Email Filters */}
-          <EmailFilters
-            onFiltersChange={setFilters}
-            accounts={accounts}
-            categories={categories}
-            onRecategorize={handleRecategorizeEmails}
-            isRecategorizing={isRecategorizing}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b bg-background">
+        <div className="flex items-center space-x-2">
+          <Input
+            placeholder="Search emails..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+            prefix={<Search className="h-4 w-4 text-muted-foreground" />}
           />
-        </CardHeader>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+                <Filter className="h-4 w-4" />
+                Filters
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 p-2">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Category</h4>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-        <CardContent className="flex-1 min-h-0 p-0">
-          {filteredEmails.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-                <Mail className="h-8 w-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No emails found</h3>
-              <p className="text-sm text-gray-600 max-w-sm">
-                Try adjusting your filters or import emails from your connected Gmail accounts
-              </p>
-            </div>
-          ) : (
-            <ScrollArea className="h-full">
-              <div className="space-y-1 p-4">
-                {filteredEmails.map((email) => (
-                  <div
-                    key={email.id}
-                    className={`group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
-                      selectedEmails.has(email.id)
-                        ? "bg-blue-50 border-blue-300"
-                        : email.is_read
-                          ? "bg-white/50 border-gray-200/50"
-                          : "bg-gradient-to-r from-blue-50/50 to-white border-blue-200/50"
-                    }`}
-                  >
-                    <div className="flex items-start space-x-3">
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          checked={selectedEmails.has(email.id)}
-                          onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="data-[state=checked]:bg-blue-600"
-                        />
-                        <Avatar className="h-10 w-10 flex-shrink-0">
-                          <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
-                          <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
-                            {getSenderInitials(email.sender)}
-                          </AvatarFallback>
-                        </Avatar>
-                      </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Account</h4>
+                  <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Accounts</SelectItem>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.email}>
+                          {account.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                      <div className="flex-1 min-w-0" onClick={() => handleEmailClick(email.id)}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center space-x-2 min-w-0 flex-1">
-                            <p
-                              className={`text-sm truncate ${email.is_read ? "text-gray-700" : "font-semibold text-gray-900"}`}
-                            >
-                              {getSenderName(email.sender)}
-                            </p>
-
-                            {/* Account Label */}
-                            {email.account && (
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
-                                    {email.account.email.split("@")[0]}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Account: {email.account.email}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-
-                            {/* Category Labels */}
-                            {email.category && (
-                              <Badge
-                                variant="secondary"
-                                style={{
-                                  backgroundColor: `${email.category.color}15`,
-                                  color: email.category.color,
-                                  borderColor: `${email.category.color}30`,
-                                }}
-                                className="text-xs border"
-                              >
-                                {email.category.name}
-                              </Badge>
-                            )}
-
-                            {/* AI Suggested Category */}
-                            {email.suggested_category && (
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge
-                                    variant="secondary"
-                                    style={{
-                                      backgroundColor: `${email.suggested_category.color}10`,
-                                      color: email.suggested_category.color,
-                                      borderColor: `${email.suggested_category.color}20`,
-                                    }}
-                                    className="text-xs border border-dashed flex items-center gap-1"
-                                  >
-                                    <Bot className="h-3 w-3" />
-                                    {email.suggested_category.name}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Suggested category by AI: {email.suggested_category.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <div className="flex items-center text-xs text-gray-500">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatDate(email.received_at)}
-                            </div>
-                            {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full"></div>}
-                          </div>
-                        </div>
-
-                        <h3
-                          className={`text-sm mb-2 line-clamp-1 ${email.is_read ? "text-gray-800" : "font-semibold text-gray-900"}`}
-                        >
-                          {email.subject}
-                        </h3>
-
-                        {/* AI Summary */}
-                        {email.ai_summary && (
-                          <div className="bg-gradient-to-r from-purple-50/50 to-blue-50/50 rounded-md p-2 mb-2 border border-purple-100/50">
-                            <div className="flex items-center mb-1">
-                              <Sparkles className="h-3 w-3 text-purple-600 mr-1" />
-                              <span className="text-xs font-medium text-purple-900">AI Summary</span>
-                            </div>
-                            <p className="text-xs text-purple-800 line-clamp-2 leading-relaxed">{email.ai_summary}</p>
-                          </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Date Range</h4>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant={"outline"} className="w-full justify-start text-left font-normal">
+                        {filterDateRange.from ? (
+                          filterDateRange.to ? (
+                            <>
+                              {format(filterDateRange.from, "LLL dd, y")} - {format(filterDateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(filterDateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
                         )}
-
-                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
-
-                        {/* Email metadata */}
-                        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                          <div className="flex items-center space-x-2">
-                            <User className="h-3 w-3" />
-                            <span className="truncate">{email.account?.email || "Unknown account"}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            {email.is_read ? <MailOpen className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
-                            <Archive className="h-3 w-3" />
-                          </div>
-                        </div>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="range"
+                        selected={filterDateRange}
+                        onSelect={setFilterDateRange}
+                        numberOfMonths={2}
+                      />
+                      <div className="p-2 flex justify-end">
+                        <Button variant="ghost" onClick={() => setFilterDateRange({})}>
+                          Clear
+                        </Button>
                       </div>
-                    </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-blue-50/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  </div>
-                ))}
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Read Status</h4>
+                  <Select
+                    value={String(filterIsRead)}
+                    onValueChange={(val) => setFilterIsRead(val === "true" ? true : val === "false" ? false : "all")}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="false">Unread</SelectItem>
+                      <SelectItem value="true">Read</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/*
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Attachment</h4>
+                  <Select value={String(filterHasAttachment)} onValueChange={(val) => setFilterHasAttachment(val === "true" ? true : val === "false" ? false : "all")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="true">Has Attachment</SelectItem>
+                      <SelectItem value="false">No Attachment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                */}
               </div>
-            </ScrollArea>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="flex items-center space-x-2">
+          {selectedEmails.size > 0 && (
+            <>
+              <Button variant="outline" onClick={() => setIsConfirmDeleteOpen(true)}>
+                <Trash className="h-4 w-4 mr-2" />
+                Delete ({selectedEmails.size})
+              </Button>
+              <Button variant="outline" onClick={() => setIsConfirmUnsubscribeOpen(true)}>
+                <Unsubscribe className="h-4 w-4 mr-2" />
+                Unsubscribe ({selectedEmails.size})
+              </Button>
+              <Button variant="outline" onClick={handleRecategorizeWithAI}>
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Recategorize with AI ({selectedEmails.size})
+              </Button>
+            </>
           )}
-        </CardContent>
-      </Card>
+          <Button variant="ghost" size="icon" onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}>
+            <ArrowDownUp className="h-4 w-4" />
+            <span className="sr-only">Sort by Date</span>
+          </Button>
+        </div>
+      </div>
 
-      {/* Email Detail Dialog */}
-      <EmailDetailDialog emailId={selectedEmailId} isOpen={isDetailDialogOpen} onClose={handleCloseDetailDialog} />
+      <div className="flex-1 overflow-y-auto">
+        {paginatedEmails.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">No emails found matching your criteria.</div>
+        ) : (
+          <div className="divide-y">
+            {paginatedEmails.map((email) => (
+              <div
+                key={email.id}
+                className="flex items-center gap-4 p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+              >
+                <Checkbox
+                  checked={selectedEmails.has(email.id)}
+                  onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
+                />
+                <div className="flex-1 grid gap-1" onClick={() => handleEmailClick(email)}>
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium flex items-center gap-2">
+                      {email.sender}
+                      {email.is_ai_suggested && (
+                        <Badge variant="outline" className="text-xs px-2 py-0.5 border-dashed flex items-center gap-1">
+                          <Bot className="h-3 w-3" /> AI Suggested
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(email.date), "MMM dd, yyyy hh:mm a")}
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground line-clamp-1">{email.subject}</div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge className="px-2 py-0.5" style={{ backgroundColor: getCategoryColor(email.category_id) }}>
+                      {getCategoryName(email.category_id)}
+                    </Badge>
+                    <Badge variant="secondary" className="px-2 py-0.5">
+                      {email.account_email}
+                    </Badge>
+                    {email.is_read && (
+                      <Badge variant="outline" className="px-2 py-0.5">
+                        Read
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <ChevronDown className="h-4 w-4" />
+                      <span className="sr-only">More actions</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleEmailClick(email)}>
+                      <Eye className="h-4 w-4 mr-2" /> View
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCategorize(email.id, null)}>
+                      <Mail className="h-4 w-4 mr-2" /> Mark Uncategorized
+                    </DropdownMenuItem>
+                    {categories.map((category) => (
+                      <DropdownMenuItem key={category.id} onClick={() => handleCategorize(email.id, category.id)}>
+                        <span
+                          className="inline-block w-2 h-2 rounded-full mr-2"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        Categorize as {category.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Unsubscribe Results Dialog */}
-      <UnsubscribeResultsDialog
-        isOpen={showUnsubscribeResults}
-        onClose={() => setShowUnsubscribeResults(false)}
-        results={unsubscribeResults}
-        totalProcessed={unsubscribeStats.processed}
-        totalSuccessful={unsubscribeStats.successful}
+      <EmailPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        emailsPerPage={emailsPerPage}
+        onEmailsPerPageChange={handleEmailsPerPageChange}
+        totalEmails={filteredEmails.length}
       />
-    </TooltipProvider>
+
+      {selectedEmail && (
+        <EmailDetailDialog
+          isOpen={isDetailDialogOpen}
+          onClose={handleEmailDetailClose}
+          email={selectedEmail}
+          onCategorize={handleCategorize}
+          categories={categories}
+        />
+      )}
+
+      <UnsubscribeResultsDialog
+        isOpen={isUnsubscribeResultsDialogOpen}
+        onClose={() => setIsUnsubscribeResultsDialogOpen(false)}
+        results={unsubscribeResults}
+        totalProcessed={totalProcessedUnsubscribes}
+        totalSuccessful={totalSuccessfulUnsubscribes}
+      />
+
+      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedEmails.size} selected emails? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isConfirmUnsubscribeOpen} onOpenChange={setIsConfirmUnsubscribeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Unsubscribe</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to attempt to unsubscribe from {selectedEmails.size} selected emails? The AI agent
+              will visit the unsubscribe links. This process may take some time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnsubscribeSelected}>Unsubscribe</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }

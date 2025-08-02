@@ -88,6 +88,8 @@ export class UnsubscribeAgent {
 
   async processUnsubscribe(link: UnsubscribeLink): Promise<UnsubscribeResult> {
     let browser: puppeteer.Browser | null = null
+    let page: puppeteer.Page | null = null
+
     try {
       // Handle mailto links
       if (link.url.startsWith("mailto:")) {
@@ -113,40 +115,39 @@ export class UnsubscribeAgent {
         ],
       })
 
-      let page: puppeteer.Page | null = null
-      let navigationPromise: Promise<puppeteer.HTTPResponse | null> | null = null
-
-      // Listen for new pages being created (e.g., pop-ups, redirects to new tabs)
-      browser.on("targetcreated", async (target) => {
-        if (target.type() === "page" && !page) {
-          page = await target.page()
-        }
+      // This promise will resolve with a new page if one is created (e.g., pop-up, new tab)
+      const newPagePromise = new Promise<puppeteer.Page>((resolve) => {
+        browser!.once("targetcreated", async (target) => {
+          if (target.type() === "page") {
+            const newPage = await target.page()
+            // Wait for the new page to load its DOM content before resolving
+            await newPage.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {})
+            resolve(newPage)
+          }
+        })
       })
 
-      // Try to navigate to the URL
-      try {
-        page = await browser.newPage()
-        await page.setUserAgent(
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        )
-        navigationPromise = page.goto(link.url, { waitUntil: "networkidle2", timeout: 30000 })
-        await navigationPromise
-      } catch (navError) {
-        // If navigation fails or frame detaches, try to find an existing page
-        console.warn(`Initial navigation to ${link.url} failed or detached. Trying to find existing page.`, navError)
-        if (!page) {
-          const pages = await browser.pages()
-          page = pages[0] // Fallback to the first available page
-        }
-        if (!page) {
-          throw new Error("No active page found after navigation attempt.")
-        }
-      }
+      page = await browser.newPage()
+      await page.setUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      )
+
+      // Race the initial navigation with the possibility of a new page opening
+      const resultPage = await Promise.race([
+        page.goto(link.url, { waitUntil: "domcontentloaded", timeout: 30000 }).then(() => page),
+        newPagePromise,
+      ])
+
+      // Use the page that won the race
+      page = resultPage
 
       // Ensure page is not null before proceeding
       if (!page) {
         throw new Error("Page object is null after navigation attempts.")
       }
+
+      // Wait a bit for content to render after navigation
+      await page.waitForTimeout(2000)
 
       // Take a screenshot for debugging
       const screenshot = await page.screenshot({ encoding: "base64" })
@@ -159,40 +160,40 @@ export class UnsubscribeAgent {
       const { text: analysisText } = await generateText({
         model: this.model,
         prompt: `
-          You are an AI agent helping to unsubscribe from an email list. 
-          
-          Page URL: ${link.url}
-          Page text content: ${pageText.substring(0, 2000)}
-          
-          Analyze this unsubscribe page and determine what actions need to be taken:
-          1. Is this a simple confirmation page that just needs a button click?
-          2. Does it require filling out a form?
-          3. Are there checkboxes or dropdowns to interact with?
-          4. Is there a CAPTCHA present?
-          5. Does it require email confirmation?
-          
-          Look for elements like:
-          - "Confirm unsubscribe" buttons
-          - "Unsubscribe" buttons
-          - Email input fields
-          - Reason dropdowns/checkboxes
-          - Submit buttons
-          
-          Respond with a JSON object:
-          {
-            "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
-            "elements": [
-              {
-                "type": "button|input|select|checkbox",
-                "selector": "CSS selector or text to find element",
-                "action": "click|type|select",
-                "value": "value to enter if needed"
-              }
-            ],
-            "confidence": 0.0-1.0,
-            "message": "description of what was found and what needs to be done"
-          }
-        `,
+            You are an AI agent helping to unsubscribe from an email list. 
+            
+            Page URL: ${link.url}
+            Page text content: ${pageText.substring(0, 2000)}
+            
+            Analyze this unsubscribe page and determine what actions need to be taken:
+            1. Is this a simple confirmation page that just needs a button click?
+            2. Does it require filling out a form?
+            3. Are there checkboxes or dropdowns to interact with?
+            4. Is there a CAPTCHA present?
+            5. Does it require email confirmation?
+            
+            Look for elements like:
+            - "Confirm unsubscribe" buttons
+            - "Unsubscribe" buttons
+            - Email input fields
+            - Reason dropdowns/checkboxes
+            - Submit buttons
+            
+            Respond with a JSON object:
+            {
+              "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
+              "elements": [
+                {
+                  "type": "button|input|select|checkbox",
+                  "selector": "CSS selector or text to find element",
+                  "action": "click|type|select",
+                  "value": "value to enter if needed"
+                }
+              ],
+              "confidence": 0.0-1.0,
+              "message": "description of what was found and what needs to be done"
+            }
+          `,
       })
 
       let analysis
