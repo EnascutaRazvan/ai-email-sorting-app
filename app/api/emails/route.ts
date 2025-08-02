@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { createClient } from "@supabase/supabase-js"
-import { handleError } from "@/lib/error-handler"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -15,66 +14,103 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const categoryId = searchParams.get("categoryId")
-    const accountId = searchParams.get("accountId")
-    const query = searchParams.get("query")
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "20")
-    const offset = (page - 1) * limit
+    const categoryId = searchParams.get("category")
+    const accountId = searchParams.get("account")
+    const dateFrom = searchParams.get("dateFrom")
+    const dateTo = searchParams.get("dateTo")
+    const sender = searchParams.get("sender")
+    const search = searchParams.get("search")
 
-    // Fetch all connected account IDs for the current user
+    // First, get all connected accounts for the current user
     const { data: connectedAccounts, error: accountsError } = await supabase
       .from("user_accounts")
-      .select("id, email")
+      .select("id")
       .eq("user_id", session.user.id)
 
     if (accountsError) {
       console.error("Error fetching connected accounts:", accountsError)
-      return handleError(accountsError, "Failed to fetch connected accounts", 500)
+      return NextResponse.json({ error: "Failed to fetch connected accounts" }, { status: 500 })
     }
 
     const connectedAccountIds = connectedAccounts.map((acc) => acc.id)
-    const connectedAccountMap = new Map(connectedAccounts.map((acc) => [acc.id, acc.email]))
 
-    let emailQuery = supabase.from("emails").select("*", { count: "exact" }).in("account_id", connectedAccountIds) // Only fetch emails from connected accounts
+    if (connectedAccountIds.length === 0) {
+      // No connected accounts, return empty result
+      return NextResponse.json({ success: true, emails: [] })
+    }
 
+    // Only show emails from currently connected accounts
+    let query = supabase
+      .from("emails")
+      .select(`
+        *,
+        categories(id, name, color),
+        user_accounts(email, name)
+      `)
+      .eq("user_id", session.user.id)
+      .in("account_id", connectedAccountIds) // Only emails from connected accounts
+      .order("received_at", { ascending: false })
+      .limit(100)
+
+    // Apply filters
     if (categoryId && categoryId !== "all") {
-      emailQuery = emailQuery.eq("category_id", categoryId)
+      if (categoryId === "uncategorized") {
+        query = query.is("category_id", null)
+      } else {
+        query = query.eq("category_id", categoryId)
+      }
     }
 
-    if (query) {
-      emailQuery = emailQuery.ilike("subject", `%${query}%`)
+    if (accountId) {
+      query = query.eq("account_id", accountId)
     }
 
-    if (accountId && accountId !== "all") {
-      emailQuery = emailQuery.eq("account_id", accountId)
+    if (dateFrom) {
+      query = query.gte("received_at", dateFrom)
     }
 
-    const {
-      data: emails,
-      error,
-      count,
-    } = await emailQuery.order("date", { ascending: false }).range(offset, offset + limit - 1)
+    if (dateTo) {
+      query = query.lte("received_at", dateTo)
+    }
+
+    if (sender) {
+      query = query.ilike("sender", `%${sender}%`)
+    }
+
+    if (search) {
+      query = query.or(
+        `subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%,ai_summary.ilike.%${search}%`,
+      )
+    }
+
+    const { data: emails, error } = await query
 
     if (error) {
       console.error("Error fetching emails:", error)
-      return handleError(error, "Failed to fetch emails", 500)
+      return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
     }
 
-    // Attach account email to each email for display
-    const emailsWithAccountInfo = emails.map((email) => ({
+    // Transform the data to include account and category information
+    const transformedEmails = emails.map((email) => ({
       ...email,
-      account_email: connectedAccountMap.get(email.account_id),
+      category: email.categories
+        ? {
+            id: email.categories.id,
+            name: email.categories.name,
+            color: email.categories.color,
+          }
+        : null,
+      account: email.user_accounts
+        ? {
+            email: email.user_accounts.email,
+            name: email.user_accounts.name,
+          }
+        : null,
     }))
 
-    return NextResponse.json({
-      emails: emailsWithAccountInfo,
-      total: count,
-      page,
-      limit,
-    })
+    return NextResponse.json({ success: true, emails: transformedEmails })
   } catch (error) {
-    console.error("Unexpected error fetching emails:", error)
-    return handleError(error, "An unexpected error occurred", 500)
+    console.error("API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
