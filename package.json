@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "postinstall": "playwright install",
+    "postinstall": "echo Skipping browser download",
+    "vercel-build": "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 next build",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start"
