@@ -211,22 +211,27 @@ async function buildDateQuery(accountId: string, userId: string, isScheduled: bo
 }
 
 function extractEmailBody(payload: any): string {
-  let body = ""
+  if (payload.parts) {
+    // Prefer HTML
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/html" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
+      }
+    }
 
-  if (payload.body?.data) {
-    body = Buffer.from(payload.body.data, "base64").toString("utf-8")
-  } else if (payload.parts) {
+    // Fallback to plain text
     for (const part of payload.parts) {
       if (part.mimeType === "text/plain" && part.body?.data) {
-        body = Buffer.from(part.body.data, "base64").toString("utf-8")
-        break
-      } else if (part.mimeType === "text/html" && part.body?.data && !body) {
-        body = Buffer.from(part.body.data, "base64").toString("utf-8")
+        return Buffer.from(part.body.data, "base64").toString("utf-8")
       }
     }
   }
 
-  return body || "No content available"
+  if (payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8")
+  }
+
+  return "No content available"
 }
 
 async function generateEmailSummary(subject: string, from: string, body: string): Promise<string> {

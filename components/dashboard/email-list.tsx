@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot } from "lucide-react"
+import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot, Trash2, UserX } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
+import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Email {
   id: string
@@ -44,6 +46,24 @@ interface EmailListProps {
   onEmailsChange?: () => void
 }
 
+interface UnsubscribeResult {
+  emailId: string
+  subject: string
+  sender: string
+  success: boolean
+  summary: string
+  details: Array<{
+    link: { url: string; text: string; method: string }
+    result: {
+      success: boolean
+      method: string
+      error?: string
+      details?: string
+      screenshot?: string
+    }
+  }>
+}
+
 export function EmailList({ selectedCategory, accounts, categories, onEmailsChange }: EmailListProps) {
   const { data: session } = useSession()
   const [emails, setEmails] = useState<Email[]>([])
@@ -60,6 +80,13 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
     dateTo: null,
     sender: "",
   })
+
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isUnsubscribing, setIsUnsubscribing] = useState(false)
+  const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([])
+  const [showUnsubscribeResults, setShowUnsubscribeResults] = useState(false)
+  const [unsubscribeStats, setUnsubscribeStats] = useState({ processed: 0, successful: 0 })
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -190,6 +217,82 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
     }
   }
 
+  const handleSelectEmail = (emailId: string, checked: boolean) => {
+    const newSelected = new Set(selectedEmails)
+    if (checked) {
+      newSelected.add(emailId)
+    } else {
+      newSelected.delete(emailId)
+    }
+    setSelectedEmails(newSelected)
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedEmails(new Set(filteredEmails.map((email) => email.id)))
+    } else {
+      setSelectedEmails(new Set())
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedEmails.size === 0) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch("/api/emails/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
+      })
+
+      if (response.ok) {
+        showSuccessToast("Emails Deleted", `Successfully deleted ${selectedEmails.size} emails`)
+        setSelectedEmails(new Set())
+        fetchEmailsWithFilters()
+        onEmailsChange?.()
+      } else {
+        throw new Error("Failed to delete emails")
+      }
+    } catch (error) {
+      showErrorToast(error, "Deleting Emails")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleBulkUnsubscribe = async () => {
+    if (selectedEmails.size === 0) return
+
+    setIsUnsubscribing(true)
+    try {
+      const response = await fetch("/api/emails/bulk-unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailIds: Array.from(selectedEmails) }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setUnsubscribeResults(data.results)
+        setUnsubscribeStats({ processed: data.processed, successful: data.successful })
+        setShowUnsubscribeResults(true)
+        setSelectedEmails(new Set())
+        fetchEmailsWithFilters()
+        showSuccessToast(
+          "Unsubscribe Complete",
+          `Processed ${data.processed} emails, ${data.successful} successful unsubscribes`,
+        )
+      } else {
+        throw new Error("Failed to process unsubscribe requests")
+      }
+    } catch (error) {
+      showErrorToast(error, "Bulk Unsubscribe")
+    } finally {
+      setIsUnsubscribing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full">
@@ -217,16 +320,59 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
               <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
                 {filteredEmails.length}
               </Badge>
+              {selectedEmails.size > 0 && (
+                <Badge variant="default" className="ml-2 bg-blue-600 text-white text-xs">
+                  {selectedEmails.size} selected
+                </Badge>
+              )}
             </CardTitle>
-            <Button
-              onClick={fetchEmailsWithFilters}
-              variant="ghost"
-              size="sm"
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              {selectedEmails.size > 0 && (
+                <>
+                  <Button
+                    onClick={handleBulkDelete}
+                    variant="outline"
+                    size="sm"
+                    disabled={isDeleting}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 bg-transparent"
+                  >
+                    {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    Delete
+                  </Button>
+                  <Button
+                    onClick={handleBulkUnsubscribe}
+                    variant="outline"
+                    size="sm"
+                    disabled={isUnsubscribing}
+                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 bg-transparent"
+                  >
+                    {isUnsubscribing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
+                    {isUnsubscribing ? "Processing..." : "Unsubscribe"}
+                  </Button>
+                </>
+              )}
+              <Button
+                onClick={fetchEmailsWithFilters}
+                variant="ghost"
+                size="sm"
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
+
+          {/* Bulk Selection Controls */}
+          {filteredEmails.length > 0 && (
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                checked={selectedEmails.size === filteredEmails.length}
+                onCheckedChange={handleSelectAll}
+                className="data-[state=checked]:bg-blue-600"
+              />
+              <span className="text-sm text-gray-600">Select all ({filteredEmails.length} emails)</span>
+            </div>
+          )}
 
           {/* Email Filters */}
           <EmailFilters
@@ -255,22 +401,31 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                 {filteredEmails.map((email) => (
                   <div
                     key={email.id}
-                    onClick={() => handleEmailClick(email.id)}
                     className={`group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
-                      email.is_read
-                        ? "bg-white/50 border-gray-200/50"
-                        : "bg-gradient-to-r from-blue-50/50 to-white border-blue-200/50"
+                      selectedEmails.has(email.id)
+                        ? "bg-blue-50 border-blue-300"
+                        : email.is_read
+                          ? "bg-white/50 border-gray-200/50"
+                          : "bg-gradient-to-r from-blue-50/50 to-white border-blue-200/50"
                     }`}
                   >
                     <div className="flex items-start space-x-3">
-                      <Avatar className="h-10 w-10 flex-shrink-0">
-                        <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
-                        <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
-                          {getSenderInitials(email.sender)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="flex items-center space-x-3">
+                        <Checkbox
+                          checked={selectedEmails.has(email.id)}
+                          onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="data-[state=checked]:bg-blue-600"
+                        />
+                        <Avatar className="h-10 w-10 flex-shrink-0">
+                          <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
+                          <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
+                            {getSenderInitials(email.sender)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
 
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0" onClick={() => handleEmailClick(email.id)}>
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center space-x-2 min-w-0 flex-1">
                             <p
@@ -386,6 +541,15 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
       {/* Email Detail Dialog */}
       <EmailDetailDialog emailId={selectedEmailId} isOpen={isDetailDialogOpen} onClose={handleCloseDetailDialog} />
+
+      {/* Unsubscribe Results Dialog */}
+      <UnsubscribeResultsDialog
+        isOpen={showUnsubscribeResults}
+        onClose={() => setShowUnsubscribeResults(false)}
+        results={unsubscribeResults}
+        totalProcessed={unsubscribeStats.processed}
+        totalSuccessful={unsubscribeStats.successful}
+      />
     </TooltipProvider>
   )
 }
