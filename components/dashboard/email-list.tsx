@@ -54,7 +54,7 @@ interface Email {
     id: string
     email: string
   }
-  summary?: string
+  ai_summary?: string
   content_preview?: string
   snippet?: string
 }
@@ -85,7 +85,7 @@ interface UnsubscribeResult {
   subject: string
   sender: string
   success: boolean
-  summary: string
+  ai_summary: string
   details: Array<{
     link: { url: string; text: string; method: string }
     result: {
@@ -297,10 +297,11 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
 
     try {
       const response = await fetch("/api/emails/bulk-delete", {
-        method: "DELETE",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emailIds }),
       })
+
 
       if (response.ok) {
         setEmails((prev) => prev.filter((email) => !emailIds.includes(email.id)))
@@ -414,9 +415,9 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
       {/* Filters */}
       <EmailFilters
         searchQuery={searchQuery}
-        onSearchChange={() => {}} // Handled by parent
+        onSearchChange={() => { }} // Handled by parent
         selectedCategory={selectedCategory}
-        onCategoryChange={() => {}} // Handled by parent
+        onCategoryChange={() => { }} // Handled by parent
         sortBy={sortBy}
         onSortChange={setSortBy}
         sortOrder={sortOrder}
@@ -449,22 +450,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                 <Badge variant="secondary" className="bg-primary text-primary-foreground">
                   {selectedEmails.size} selected
                 </Badge>
-
-                <Button variant="outline" size="sm" onClick={() => handleMarkAsRead(Array.from(selectedEmails), true)}>
-                  <Eye className="mr-1 h-3 w-3" />
-                  Mark Read
-                </Button>
-
-                <Button variant="outline" size="sm" onClick={() => handleMarkAsRead(Array.from(selectedEmails), false)}>
-                  <EyeOff className="mr-1 h-3 w-3" />
-                  Mark Unread
-                </Button>
-
-                <Button variant="outline" size="sm" onClick={() => handleArchive(Array.from(selectedEmails))}>
-                  <Archive className="mr-1 h-3 w-3" />
-                  Archive
-                </Button>
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -594,13 +579,13 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                           </p>
 
                           {/* AI Summary */}
-                          {email.summary && (
+                          {email.ai_summary && (
                             <div className="bg-primary/5 rounded-md p-2 border border-primary/10">
                               <div className="flex items-center mb-1">
                                 <Sparkles className="h-3 w-3 text-primary mr-1" />
                                 <span className="text-xs font-medium text-primary">AI Summary</span>
                               </div>
-                              <p className="text-xs text-foreground line-clamp-2 leading-relaxed">{email.summary}</p>
+                              <p className="text-xs text-foreground line-clamp-2 leading-relaxed">{email.ai_summary}</p>
                             </div>
                           )}
 
@@ -630,64 +615,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                         </div>
                       </div>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleMarkAsRead([email.id], !email.is_read)
-                            }}
-                          >
-                            {email.is_read ? (
-                              <>
-                                <EyeOff className="mr-2 h-4 w-4" />
-                                Mark as unread
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Mark as read
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleMarkAsStarred([email.id], !email.is_starred)
-                            }}
-                          >
-                            <Star className="mr-2 h-4 w-4" />
-                            {email.is_starred ? "Remove star" : "Add star"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleArchive([email.id])
-                            }}
-                          >
-                            <Archive className="mr-2 h-4 w-4" />
-                            Archive
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete([email.id])
-                            }}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 ))}
