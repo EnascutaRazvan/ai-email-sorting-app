@@ -8,7 +8,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import {
   ArrowDownUp,
   Mail,
-  Search,
   Filter,
   Trash,
   RefreshCcw,
@@ -92,7 +91,7 @@ export function EmailList({
   onEmailsUnsubscribed: (unsubscribedEmailIds: string[]) => void
 }) {
   const [emails, setEmails] = useState<Email[]>(initialEmails)
-  const [selectedEmails, setSelectedEmails] = new Set<string>()
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string | "all">("all")
   const [selectedAccount, setSelectedAccount] = useState<string | "all">("all")
@@ -306,7 +305,7 @@ export function EmailList({
   }
 
   const filteredEmails = useMemo(() => {
-    let filtered = emails
+    let filtered = emails || []
 
     // Search filter
     if (searchTerm) {
@@ -353,11 +352,13 @@ export function EmailList({
     // }
 
     // Sort
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
-      return sortOrder === "desc" ? dateB - dateA : dateA - dateB
-    })
+    if (filtered && filtered.length > 0) {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.date).getTime()
+        const dateB = new Date(b.date).getTime()
+        return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+      })
+    }
 
     return filtered
   }, [
@@ -412,7 +413,6 @@ export function EmailList({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-sm"
-            prefix={<Search className="h-4 w-4 text-muted-foreground" />}
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -508,22 +508,6 @@ export function EmailList({
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/*
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Attachment</h4>
-                  <Select value={String(filterHasAttachment)} onValueChange={(val) => setFilterHasAttachment(val === "true" ? true : val === "false" ? false : "all")}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="true">Has Attachment</SelectItem>
-                      <SelectItem value="false">No Attachment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                */}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
