@@ -25,11 +25,21 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
   const handleConnectAccount = async () => {
     setIsConnecting(true)
     try {
-      // Create popup window for OAuth
+      // First, request the auth URL from your server
+      const res = await fetch("/api/auth/connect-account")
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to get authorization URL")
+      }
+
+      const { authUrl } = data
+
+      // Now open the popup with the actual Google auth URL
       const popup = window.open(
-        "/api/auth/connect-account",
+        authUrl,
         "connect-gmail",
-        "width=500,height=600,scrollbars=yes,resizable=yes",
+        "width=500,height=600,scrollbars=yes,resizable=yes"
       )
 
       if (!popup) {
@@ -66,6 +76,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
       setIsConnecting(false)
     }
   }
+
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
