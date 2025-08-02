@@ -1,7 +1,7 @@
 -- Create user_settings table for storing user preferences
 CREATE TABLE IF NOT EXISTS user_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   auto_sync_enabled BOOLEAN DEFAULT true,
   emails_per_page INTEGER DEFAULT 10 CHECK (emails_per_page > 0 AND emails_per_page <= 100),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

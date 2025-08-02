@@ -13,13 +13,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const categoryId = searchParams.get("categoryId")
-    const accountId = searchParams.get("accountId")
     const search = searchParams.get("search")
-    const isRead = searchParams.get("isRead")
+    const category = searchParams.get("category")
+    const account = searchParams.get("account")
+    const dateFrom = searchParams.get("dateFrom")
+    const dateTo = searchParams.get("dateTo")
+    const sender = searchParams.get("sender")
     const page = Number.parseInt(searchParams.get("page") || "1")
     const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const offset = (page - 1) * limit
 
     let query = supabase
       .from("emails")
@@ -27,30 +28,39 @@ export async function GET(request: NextRequest) {
         *,
         category:categories(id, name, color),
         suggested_category:categories!emails_suggested_category_id_fkey(id, name, color),
-        account:user_accounts(id, email, name)
+        account:user_accounts(email, name)
       `)
       .eq("user_id", session.user.id)
-      .order("received_at", { ascending: false })
 
     // Apply filters
-    if (categoryId && categoryId !== "all") {
-      if (categoryId === "uncategorized") {
+    if (search) {
+      query = query.or(
+        `subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%,ai_summary.ilike.%${search}%`,
+      )
+    }
+
+    if (category && category !== "all") {
+      if (category === "uncategorized") {
         query = query.is("category_id", null)
       } else {
-        query = query.eq("category_id", categoryId)
+        query = query.eq("category_id", category)
       }
     }
 
-    if (accountId && accountId !== "all") {
-      query = query.eq("account_id", accountId)
+    if (account && account !== "all") {
+      query = query.eq("account_id", account)
     }
 
-    if (search) {
-      query = query.or(`subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%`)
+    if (dateFrom) {
+      query = query.gte("received_at", dateFrom)
     }
 
-    if (isRead !== null && isRead !== "all") {
-      query = query.eq("is_read", isRead === "true")
+    if (dateTo) {
+      query = query.lte("received_at", dateTo)
+    }
+
+    if (sender) {
+      query = query.ilike("sender", `%${sender}%`)
     }
 
     // Get total count for pagination
@@ -59,8 +69,9 @@ export async function GET(request: NextRequest) {
       .select("*", { count: "exact", head: true })
       .eq("user_id", session.user.id)
 
-    // Apply pagination
-    query = query.range(offset, offset + limit - 1)
+    // Apply pagination and ordering
+    const offset = (page - 1) * limit
+    query = query.order("received_at", { ascending: false }).range(offset, offset + limit - 1)
 
     const { data: emails, error } = await query
 
@@ -78,42 +89,6 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((count || 0) / limit),
       },
     })
-  } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function PATCH(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { emailId, updates } = await request.json()
-
-    if (!emailId) {
-      return NextResponse.json({ error: "Email ID is required" }, { status: 400 })
-    }
-
-    const { data: email, error } = await supabase
-      .from("emails")
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", emailId)
-      .eq("user_id", session.user.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Error updating email:", error)
-      return NextResponse.json({ error: "Failed to update email" }, { status: 500 })
-    }
-
-    return NextResponse.json({ email })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

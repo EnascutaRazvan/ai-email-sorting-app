@@ -10,7 +10,7 @@ interface EmailPaginationProps {
   totalEmails: number
   emailsPerPage: number
   onPageChange: (page: number) => void
-  onEmailsPerPageChange: (limit: number) => void
+  onLimitChange: (limit: number) => void
 }
 
 export function EmailPagination({
@@ -19,62 +19,56 @@ export function EmailPagination({
   totalEmails,
   emailsPerPage,
   onPageChange,
-  onEmailsPerPageChange,
+  onLimitChange,
 }: EmailPaginationProps) {
   const startEmail = (currentPage - 1) * emailsPerPage + 1
   const endEmail = Math.min(currentPage * emailsPerPage, totalEmails)
 
-  const getPageNumbers = () => {
-    const pages = []
-    const maxVisiblePages = 5
+  const getVisiblePages = () => {
+    const delta = 2
+    const range = []
+    const rangeWithDots = []
 
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i)
-      }
-    } else {
-      const start = Math.max(1, currentPage - 2)
-      const end = Math.min(totalPages, start + maxVisiblePages - 1)
-
-      if (start > 1) {
-        pages.push(1)
-        if (start > 2) pages.push("...")
-      }
-
-      for (let i = start; i <= end; i++) {
-        pages.push(i)
-      }
-
-      if (end < totalPages) {
-        if (end < totalPages - 1) pages.push("...")
-        pages.push(totalPages)
-      }
+    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+      range.push(i)
     }
 
-    return pages
+    if (currentPage - delta > 2) {
+      rangeWithDots.push(1, "...")
+    } else {
+      rangeWithDots.push(1)
+    }
+
+    rangeWithDots.push(...range)
+
+    if (currentPage + delta < totalPages - 1) {
+      rangeWithDots.push("...", totalPages)
+    } else if (totalPages > 1) {
+      rangeWithDots.push(totalPages)
+    }
+
+    return rangeWithDots
   }
 
-  if (totalEmails === 0) {
-    return null
-  }
+  if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
-      <div className="flex items-center gap-4">
-        <div className="text-sm text-gray-700">
-          Showing {startEmail} to {endEmail} of {totalEmails} emails
-        </div>
+    <div className="flex items-center justify-between px-4 py-3 bg-white/50 backdrop-blur-sm border-t border-gray-200/50">
+      {/* Results info */}
+      <div className="flex items-center space-x-4">
+        <p className="text-sm text-gray-700">
+          Showing <span className="font-medium">{startEmail}</span> to <span className="font-medium">{endEmail}</span>{" "}
+          of <span className="font-medium">{totalEmails}</span> emails
+        </p>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show:</span>
-          <Select
-            value={emailsPerPage.toString()}
-            onValueChange={(value) => onEmailsPerPageChange(Number.parseInt(value))}
-          >
+        {/* Emails per page selector */}
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-600">Show:</span>
+          <Select value={emailsPerPage.toString()} onValueChange={(value) => onLimitChange(Number.parseInt(value))}>
             <SelectTrigger className="w-20 h-8">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-white">
+            <SelectContent>
               <SelectItem value="5">5</SelectItem>
               <SelectItem value="10">10</SelectItem>
               <SelectItem value="15">15</SelectItem>
@@ -85,9 +79,11 @@ export function EmailPagination({
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
+      {/* Pagination controls */}
+      <div className="flex items-center space-x-1">
+        {/* First page */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
@@ -96,8 +92,9 @@ export function EmailPagination({
           <ChevronsLeft className="h-4 w-4" />
         </Button>
 
+        {/* Previous page */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
@@ -106,23 +103,23 @@ export function EmailPagination({
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex items-center gap-1">
-          {getPageNumbers().map((page, index) => (
-            <Button
-              key={index}
-              variant={page === currentPage ? "default" : "outline"}
-              size="sm"
-              onClick={() => typeof page === "number" && onPageChange(page)}
-              disabled={page === "..."}
-              className="h-8 min-w-8 px-2"
-            >
-              {page}
-            </Button>
-          ))}
-        </div>
+        {/* Page numbers */}
+        {getVisiblePages().map((page, index) => (
+          <Button
+            key={index}
+            variant={page === currentPage ? "default" : "ghost"}
+            size="sm"
+            onClick={() => typeof page === "number" && onPageChange(page)}
+            disabled={page === "..."}
+            className="h-8 w-8 p-0"
+          >
+            {page}
+          </Button>
+        ))}
 
+        {/* Next page */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
@@ -131,8 +128,9 @@ export function EmailPagination({
           <ChevronRight className="h-4 w-4" />
         </Button>
 
+        {/* Last page */}
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
