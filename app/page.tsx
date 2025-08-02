@@ -1,232 +1,226 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Mail, Sparkles, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react"
-import Link from "next/link"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Mail, Zap, Shield, Brain, ArrowRight, CheckCircle } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function HomePage() {
   const { data: session, status } = useSession()
+  const router = useRouter()
 
   useEffect(() => {
     if (status === "authenticated") {
-      redirect("/dashboard")
+      router.push("/dashboard")
     }
-  }, [status])
+  }, [status, router])
+
+  const handleSignIn = () => {
+    router.push("/auth/signin")
+  }
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     )
   }
 
   if (session) {
-    return null // Will redirect
+    return null // Will redirect to dashboard
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       {/* Header */}
-      <header className="border-b border-border/40 bg-card/50 backdrop-blur-sm">
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Mail className="h-4 w-4 text-primary-foreground" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">Email Sorter</h1>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">Email Sorter</h1>
+              <p className="text-xs text-muted-foreground">AI-powered organization</p>
+            </div>
           </div>
-          <Link href="/auth/signin">
-            <Button variant="outline" className="bg-background hover:bg-muted">
+          <div className="flex items-center space-x-4">
+            <ThemeToggle />
+            <Button onClick={handleSignIn} className="bg-primary hover:bg-primary/90">
               Sign In
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          </Link>
+          </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <main className="container mx-auto px-4 py-16">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-6">
-            <Sparkles className="h-8 w-8 text-primary" />
-          </div>
+      <section className="container mx-auto px-4 py-20 text-center">
+        <div className="max-w-4xl mx-auto">
+          <Badge variant="secondary" className="mb-6 bg-primary/10 text-primary border-primary/20">
+            <Zap className="mr-1 h-3 w-3" />
+            AI-Powered Email Management
+          </Badge>
+
           <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6 leading-tight">
-            AI-Powered Email
-            <br />
-            <span className="text-primary">Organization</span>
+            Organize Your Emails with
+            <span className="text-primary block">Artificial Intelligence</span>
           </h1>
+
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-            Transform your chaotic inbox into an organized, intelligent email management system. Let AI categorize,
-            summarize, and help you focus on what matters most.
+            Stop drowning in emails. Our AI automatically categorizes, summarizes, and helps you unsubscribe from
+            unwanted emails, giving you back control of your inbox.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/signin">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8">
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-            <Button variant="outline" size="lg" className="bg-background hover:bg-muted px-8">
-              Watch Demo
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+            <Button onClick={handleSignIn} size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-6">
+              Get Started Free
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
+            <p className="text-sm text-muted-foreground">No credit card required</p>
           </div>
         </div>
+      </section>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-3 gap-8 mb-16">
-          <Card className="glass border-border/50 hover:border-border transition-colors">
-            <CardHeader>
-              <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
-                <Sparkles className="h-6 w-6 text-blue-600" />
-              </div>
-              <CardTitle className="text-foreground">Smart Categorization</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                AI automatically sorts your emails into meaningful categories like Work, Personal, Shopping, and more.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="glass border-border/50 hover:border-border transition-colors">
-            <CardHeader>
-              <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
-                <Zap className="h-6 w-6 text-green-600" />
-              </div>
-              <CardTitle className="text-foreground">Instant Summaries</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Get AI-generated summaries of long emails so you can quickly understand what's important.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="glass border-border/50 hover:border-border transition-colors">
-            <CardHeader>
-              <div className="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
-                <Shield className="h-6 w-6 text-purple-600" />
-              </div>
-              <CardTitle className="text-foreground">Secure & Private</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Your emails are processed securely with Google OAuth 2.0. We never store your credentials.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-
-        {/* Benefits Section */}
-        <div className="bg-card/50 rounded-2xl border border-border/50 p-8 md:p-12">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-4">Why Choose Email Sorter?</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Stop drowning in emails. Start focusing on what matters with intelligent automation.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Save Hours Every Week</h3>
-                  <p className="text-muted-foreground">
-                    Automatically organize thousands of emails in seconds, not hours of manual sorting.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Never Miss Important Emails</h3>
-                  <p className="text-muted-foreground">
-                    AI summaries help you quickly identify and prioritize critical messages.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Multiple Gmail Accounts</h3>
-                  <p className="text-muted-foreground">
-                    Connect and manage multiple Gmail accounts from one unified dashboard.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Smart Unsubscribe</h3>
-                  <p className="text-muted-foreground">
-                    Bulk unsubscribe from unwanted emails with AI-powered detection and automation.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Real-time Sync</h3>
-                  <p className="text-muted-foreground">
-                    Emails are automatically imported and processed every 15 minutes.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Advanced Filtering</h3>
-                  <p className="text-muted-foreground">
-                    Search and filter by sender, date, category, and content with powerful tools.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA Section */}
-        <div className="text-center mt-16">
-          <h2 className="text-3xl font-bold text-foreground mb-4">Ready to Transform Your Inbox?</h2>
-          <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
-            Join thousands of users who have already organized their email chaos with AI.
+      {/* Features Section */}
+      <section className="container mx-auto px-4 py-20">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Powerful Features</h2>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Everything you need to take control of your email workflow
           </p>
-          <Link href="/auth/signin">
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8">
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <Card className="glass border-border/50 hover:border-border transition-colors">
+            <CardHeader>
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
+                <Brain className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-foreground">AI Categorization</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Automatically sorts emails into smart categories using advanced AI
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Smart category detection
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Custom category creation
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Bulk email organization
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="glass border-border/50 hover:border-border transition-colors">
+            <CardHeader>
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
+                <Zap className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-foreground">Smart Summaries</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Get instant AI-generated summaries of your emails
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Key points extraction
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Action items detection
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Priority assessment
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="glass border-border/50 hover:border-border transition-colors">
+            <CardHeader>
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle className="text-foreground">Auto Unsubscribe</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Automatically unsubscribe from unwanted mailing lists
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Bulk unsubscribe
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Safe & secure process
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                  Detailed reports
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="container mx-auto px-4 py-20">
+        <Card className="glass border-border/50 max-w-4xl mx-auto text-center">
+          <CardHeader className="pb-8">
+            <CardTitle className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Ready to Transform Your Email Experience?
+            </CardTitle>
+            <CardDescription className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Join thousands of users who have already taken control of their inbox with AI-powered email management.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleSignIn} size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8 py-6">
               Start Organizing Now
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-          </Link>
-        </div>
-      </main>
+            <p className="text-sm text-muted-foreground mt-4">
+              Free to start • No setup required • Secure with Google OAuth
+            </p>
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Footer */}
-      <footer className="border-t border-border/40 bg-card/30 backdrop-blur-sm mt-16">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center space-x-3">
+      <footer className="border-t border-border bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-8 text-center">
+          <div className="flex items-center justify-center space-x-3 mb-4">
             <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
               <Mail className="h-3 w-3 text-primary-foreground" />
             </div>
-            <span className="text-muted-foreground">© 2024 Email Sorter. Powered by AI.</span>
+            <span className="text-lg font-semibold text-foreground">Email Sorter</span>
           </div>
+          <p className="text-sm text-muted-foreground">
+            © 2024 Email Sorter. All rights reserved. Built with AI for better email management.
+          </p>
         </div>
       </footer>
     </div>

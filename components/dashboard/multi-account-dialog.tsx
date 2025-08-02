@@ -10,9 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Mail, Shield, CheckCircle, AlertTriangle, ExternalLink } from "lucide-react"
+import { Plus, Mail, Shield, Zap, CheckCircle, ExternalLink } from "lucide-react"
 import { showErrorToast } from "@/lib/error-handler"
 
 interface MultiAccountDialogProps {
@@ -21,42 +19,50 @@ interface MultiAccountDialogProps {
 }
 
 export function MultiAccountDialog({ onAccountConnected, existingAccounts }: MultiAccountDialogProps) {
-  const [isConnecting, setIsConnecting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
 
   const handleConnectAccount = async () => {
     setIsConnecting(true)
     try {
-      const response = await fetch("/api/auth/connect-account")
-      if (response.ok) {
-        const data = await response.json()
+      // Create popup window for OAuth
+      const popup = window.open(
+        "/api/auth/connect-account",
+        "connect-gmail",
+        "width=500,height=600,scrollbars=yes,resizable=yes",
+      )
 
-        // Open in popup window for better UX
-        const popup = window.open(data.authUrl, "gmail-connect", "width=500,height=600,scrollbars=yes,resizable=yes")
-
-        // Listen for popup close
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            setIsConnecting(false)
-            setIsOpen(false)
-            onAccountConnected()
-          }
-        }, 1000)
-
-        // Timeout after 5 minutes
-        setTimeout(() => {
-          clearInterval(checkClosed)
-          if (popup && !popup.closed) {
-            popup.close()
-          }
-          setIsConnecting(false)
-        }, 300000)
-      } else {
-        throw new Error("Failed to generate auth URL")
+      if (!popup) {
+        throw new Error("Popup blocked. Please allow popups for this site.")
       }
+
+      // Listen for popup messages
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === "ACCOUNT_CONNECTED") {
+          popup.close()
+          setIsOpen(false)
+          onAccountConnected()
+          window.removeEventListener("message", handleMessage)
+        } else if (event.data?.type === "ACCOUNT_ERROR") {
+          popup.close()
+          showErrorToast(event.data.error || "Failed to connect account", "Account Connection")
+          window.removeEventListener("message", handleMessage)
+        }
+      }
+
+      window.addEventListener("message", handleMessage)
+
+      // Check if popup was closed manually
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed)
+          window.removeEventListener("message", handleMessage)
+          setIsConnecting(false)
+        }
+      }, 1000)
     } catch (error) {
-      showErrorToast(error, "Connecting New Account")
+      showErrorToast(error, "Connect Account")
+    } finally {
       setIsConnecting(false)
     }
   }
@@ -64,10 +70,7 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button
-          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
-          size="sm"
-        >
+        <Button className="w-full bg-primary hover:bg-primary/90">
           <Plus className="mr-2 h-4 w-4" />
           Connect Gmail Account
         </Button>
@@ -75,98 +78,93 @@ export function MultiAccountDialog({ onAccountConnected, existingAccounts }: Mul
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center text-lg">
-            <Mail className="mr-2 h-5 w-5 text-blue-600" />
+            <Mail className="mr-2 h-5 w-5 text-primary" />
             Connect Gmail Account
           </DialogTitle>
-          <DialogDescription className="text-sm text-gray-600">
-            Add another Gmail account to manage multiple inboxes in one place.
+          <DialogDescription>
+            Connect your Gmail account to start organizing emails with AI-powered categorization and smart features.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Current Status */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">Current Status</span>
+          {existingAccounts > 0 && (
+            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4">
+              <div className="flex items-center mb-2">
+                <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                <h4 className="text-sm font-medium text-green-900 dark:text-green-100">
+                  {existingAccounts} Account{existingAccounts > 1 ? "s" : ""} Connected
+                </h4>
+              </div>
+              <p className="text-xs text-green-800 dark:text-green-200">
+                You can connect multiple Gmail accounts to manage all your emails in one place.
+              </p>
             </div>
-            <p className="text-sm text-blue-800">
-              You have{" "}
-              <Badge variant="secondary" className="mx-1">
-                {existingAccounts}
-              </Badge>
-              Gmail account{existingAccounts !== 1 ? "s" : ""} connected
-            </p>
-          </div>
-
-          {/* Security Info */}
-          <Alert className="border-green-200 bg-green-50">
-            <Shield className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-sm text-green-800">
-              <strong>Secure Connection:</strong> We use Google's OAuth 2.0 for secure authentication. Your passwords
-              are never stored or accessed.
-            </AlertDescription>
-          </Alert>
-
-          {/* Instructions */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-900">What happens next:</h4>
-            <div className="space-y-2">
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">1</span>
-                </div>
-                <p className="text-sm text-gray-700">Google will open in a new window</p>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">2</span>
-                </div>
-                <p className="text-sm text-gray-700">Choose the Gmail account you want to connect</p>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-xs font-medium text-blue-600">3</span>
-                </div>
-                <p className="text-sm text-gray-700">Grant permissions to read and manage emails</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Development Warning */}
-          {process.env.NODE_ENV === "development" && (
-            <Alert variant="destructive" className="border-amber-200 bg-amber-50">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-xs text-amber-800">
-                <strong>Development Mode:</strong> If you see "Access blocked", you need to add your email as a test
-                user in Google Cloud Console.
-              </AlertDescription>
-            </Alert>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <Button
-              onClick={handleConnectAccount}
-              disabled={isConnecting}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            >
-              {isConnecting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Connect Account
-                </>
-              )}
-            </Button>
-            <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isConnecting}>
-              Cancel
-            </Button>
+          {/* Features */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-foreground">What you get:</h4>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="flex items-center">
+                <Zap className="h-4 w-4 text-blue-600 mr-2 flex-shrink-0" />
+                <span>Automatic email import every 15 minutes</span>
+              </div>
+              <div className="flex items-center">
+                <Shield className="h-4 w-4 text-green-600 mr-2 flex-shrink-0" />
+                <span>Secure OAuth 2.0 - your credentials are never stored</span>
+              </div>
+              <div className="flex items-center">
+                <CheckCircle className="h-4 w-4 text-purple-600 mr-2 flex-shrink-0" />
+                <span>AI-powered categorization and summarization</span>
+              </div>
+              <div className="flex items-center">
+                <Mail className="h-4 w-4 text-orange-600 mr-2 flex-shrink-0" />
+                <span>Smart unsubscribe from unwanted emails</span>
+              </div>
+            </div>
           </div>
+
+          {/* Security Notice */}
+          <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
+            <div className="flex items-start space-x-2">
+              <Shield className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-800 dark:text-blue-200">
+                <p className="font-medium mb-1">Your privacy is protected:</p>
+                <ul className="space-y-1">
+                  <li>• We only read email metadata and content for processing</li>
+                  <li>• Your emails are processed securely and never shared</li>
+                  <li>• You can revoke access anytime from your Google account</li>
+                  <li>• All data is encrypted and stored securely</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Connect Button */}
+          <Button
+            onClick={handleConnectAccount}
+            disabled={isConnecting}
+            className="w-full bg-primary hover:bg-primary/90"
+            size="lg"
+          >
+            {isConnecting ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Connect with Google
+              </>
+            )}
+          </Button>
+
+          {/* Help Text */}
+          <p className="text-xs text-muted-foreground text-center">
+            A popup window will open to authenticate with Google. Please allow popups for this site.
+          </p>
         </div>
       </DialogContent>
     </Dialog>
