@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -9,69 +10,49 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CheckCircle, Mail, Plus, RefreshCw } from "lucide-react"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { Mail, Plus, RefreshCw, Shield, Zap, CheckCircle } from "lucide-react"
+import { showErrorToast } from "@/lib/error-handler"
 
 interface MultiAccountDialogProps {
   isOpen: boolean
   onClose: () => void
-  onAccountsChange: () => void
+  onAccountConnected: () => void
+  existingAccounts: number
 }
 
-interface PendingAccount {
-  email: string
-  name?: string
-  selected: boolean
-}
-
-export function MultiAccountDialog({ isOpen, onClose, onAccountsChange }: MultiAccountDialogProps) {
-  const [pendingAccounts, setPendingAccounts] = useState<PendingAccount[]>([])
+export function MultiAccountDialog({ isOpen, onClose, onAccountConnected, existingAccounts }: MultiAccountDialogProps) {
   const [isConnecting, setIsConnecting] = useState(false)
 
-  const handleConnectSelected = async () => {
-    const selectedAccounts = pendingAccounts.filter((account) => account.selected)
-
-    if (selectedAccounts.length === 0) {
-      showErrorToast(new Error("Please select at least one account to connect"), "Account Selection")
-      return
-    }
-
+  const handleConnectAccount = async () => {
     setIsConnecting(true)
     try {
-      // This would typically make API calls to connect the selected accounts
-      // For now, we'll simulate the process
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await fetch("/api/auth/connect-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
 
-      showSuccessToast("Accounts Connected", `Successfully connected ${selectedAccounts.length} account(s)`)
+      if (response.ok) {
+        const data = await response.json()
+        // Open in popup window
+        const popup = window.open(data.authUrl, "gmail-connect", "width=500,height=600,scrollbars=yes,resizable=yes")
 
-      onAccountsChange()
-      onClose()
+        // Listen for popup completion
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed)
+            onAccountConnected()
+            onClose()
+          }
+        }, 1000)
+      } else {
+        throw new Error("Failed to initiate account connection")
+      }
     } catch (error) {
-      showErrorToast(error, "Connecting Accounts")
+      showErrorToast(error, "Connecting Account")
     } finally {
       setIsConnecting(false)
     }
-  }
-
-  const toggleAccountSelection = (email: string) => {
-    setPendingAccounts((prev) =>
-      prev.map((account) => (account.email === email ? { ...account, selected: !account.selected } : account)),
-    )
-  }
-
-  const getAccountInitials = (email: string, name?: string) => {
-    if (name) {
-      return name
-        .split(" ")
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2)
-    }
-    return email.substring(0, 2).toUpperCase()
   }
 
   return (
@@ -80,70 +61,83 @@ export function MultiAccountDialog({ isOpen, onClose, onAccountsChange }: MultiA
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Mail className="mr-2 h-5 w-5 text-blue-600" />
-            Connect Multiple Accounts
+            Connect Gmail Account
+            {existingAccounts > 0 && (
+              <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+                +{existingAccounts + 1}
+              </Badge>
+            )}
           </DialogTitle>
-          <DialogDescription>Select the Gmail accounts you want to connect for email organization.</DialogDescription>
+          <DialogDescription>
+            {existingAccounts === 0
+              ? "Connect your first Gmail account to start organizing your emails with AI."
+              : `Connect an additional Gmail account to manage multiple inboxes in one place. You currently have ${existingAccounts} account${existingAccounts > 1 ? "s" : ""} connected.`}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-60 overflow-y-auto">
-          {pendingAccounts.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-                <Mail className="h-6 w-6 text-gray-400" />
+        <div className="space-y-4">
+          {/* Features */}
+          <div className="bg-blue-50/50 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">What you'll get:</h4>
+            <div className="space-y-2 text-xs text-gray-700">
+              <div className="flex items-center">
+                <Mail className="h-3 w-3 text-blue-600 mr-2 flex-shrink-0" />
+                <span>
+                  {existingAccounts === 0
+                    ? "Access to all your Gmail emails in one organized dashboard"
+                    : "All emails from multiple accounts in one unified inbox"}
+                </span>
               </div>
-              <p className="text-sm text-gray-600">No accounts available to connect</p>
+              <div className="flex items-center">
+                <Zap className="h-3 w-3 text-purple-600 mr-2 flex-shrink-0" />
+                <span>Automatic AI categorization and email summarization</span>
+              </div>
+              <div className="flex items-center">
+                <CheckCircle className="h-3 w-3 text-green-600 mr-2 flex-shrink-0" />
+                <span>Smart filtering, bulk actions, and unsubscribe management</span>
+              </div>
+              <div className="flex items-center">
+                <Shield className="h-3 w-3 text-orange-600 mr-2 flex-shrink-0" />
+                <span>Secure OAuth 2.0 - your credentials are never stored</span>
+              </div>
             </div>
-          ) : (
-            pendingAccounts.map((account) => (
-              <div
-                key={account.email}
-                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                  account.selected ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"
-                }`}
-                onClick={() => toggleAccountSelection(account.email)}
-              >
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/placeholder.svg" alt={account.name || account.email} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs">
-                      {getAccountInitials(account.email, account.name)}
-                    </AvatarFallback>
-                  </Avatar>
+          </div>
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{account.name || account.email}</p>
-                    {account.name && <p className="text-xs text-gray-600 truncate">{account.email}</p>}
-                  </div>
-                </div>
-
-                {account.selected && <CheckCircle className="h-5 w-5 text-blue-600" />}
+          {/* Multiple Account Benefits */}
+          {existingAccounts > 0 && (
+            <div className="bg-green-50/50 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Multiple Account Benefits:</h4>
+              <div className="space-y-1 text-xs text-gray-700">
+                <div>• See emails from all connected accounts in one place</div>
+                <div>• Filter by specific account when needed</div>
+                <div>• Unified AI categorization across all accounts</div>
+                <div>• Remove accounts anytime to hide their emails</div>
               </div>
-            ))
+            </div>
           )}
         </div>
 
-        <DialogFooter className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            {pendingAccounts.filter((a) => a.selected).length > 0 && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                {pendingAccounts.filter((a) => a.selected).length} selected
-              </Badge>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto bg-transparent">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConnectAccount}
+            disabled={isConnecting}
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isConnecting ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Connect Gmail Account
+              </>
             )}
-          </div>
-
-          <div className="flex space-x-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConnectSelected}
-              disabled={isConnecting || pendingAccounts.filter((a) => a.selected).length === 0}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isConnecting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-              Connect Selected
-            </Button>
-          </div>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

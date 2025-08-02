@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info } from "lucide-react"
+import { Mail, CheckCircle, Trash2, AlertCircle, Shield, User, Clock, Zap, ChevronDown, Info, Plus } from "lucide-react"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { MultiAccountDialog } from "./multi-account-dialog"
 import { EmailImportButton } from "./email-import-button"
@@ -31,12 +31,14 @@ interface ConnectedAccount {
 interface UserColumn {
   image?: string
 }
+
 export function ConnectedAccounts() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isInfoExpanded, setIsInfoExpanded] = useState(false)
+  const [showMultiAccountDialog, setShowMultiAccountDialog] = useState(false)
 
   useEffect(() => {
     fetchConnectedAccounts()
@@ -122,7 +124,7 @@ export function ConnectedAccounts() {
 
     if (
       !confirm(
-        `Are you sure you want to remove ${email}?\n\nThis will hide all emails from this account. The emails will remain in the database but won't be visible in your inbox.`,
+        `Are you sure you want to remove ${email}?\n\nThis will hide all emails from this account. The emails will remain in the database but won't be visible in your inbox until you reconnect this account.`,
       )
     ) {
       return
@@ -231,19 +233,29 @@ export function ConnectedAccounts() {
                 {accounts.length}
               </Badge>
             </CardTitle>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <Info className="h-4 w-4 text-gray-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-xs">
-                <p className="text-xs">
-                  Multiple inbox support: Only emails from your connected accounts are shown. Remove an account to hide
-                  its emails.
-                </p>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-center space-x-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Info className="h-4 w-4 text-gray-400" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-xs">
+                  <p className="text-xs">
+                    Multiple inbox support: Connect multiple Gmail accounts to see all their emails in one place. Remove
+                    an account to hide its emails.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <Button
+                onClick={() => setShowMultiAccountDialog(true)}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Connect Account
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -262,7 +274,8 @@ export function ConnectedAccounts() {
               <div className="text-xs text-gray-600 space-y-1 bg-blue-50/50 rounded-lg p-3">
                 <div className="flex items-center">
                   <Mail className="h-3 w-3 text-blue-600 mr-1" />
-                  <span className="font-medium">Multiple Inboxes:</span> Each account shows only its own emails
+                  <span className="font-medium">Multiple Inboxes:</span> Connect multiple accounts to see all emails
+                  together
                 </div>
                 <div className="flex items-center">
                   <Zap className="h-3 w-3 text-blue-600 mr-1" />
@@ -287,9 +300,16 @@ export function ConnectedAccounts() {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect Your Gmail</h3>
               <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
-                Start by connecting your Gmail accounts. Each account will have its own separate inbox with automatic AI
-                processing.
+                Start by connecting your Gmail accounts. You can connect multiple accounts to manage all your emails in
+                one place with automatic AI processing.
               </p>
+              <Button
+                onClick={() => setShowMultiAccountDialog(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Connect Gmail Account
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -374,7 +394,7 @@ export function ConnectedAccounts() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Remove account (emails will be hidden)</p>
+                              <p>Remove account (emails will be hidden until reconnected)</p>
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -388,11 +408,19 @@ export function ConnectedAccounts() {
 
           {/* Email Import Button */}
           {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={fetchConnectedAccounts} />}
-
-          {/* Connection Dialog */}
-          <MultiAccountDialog onAccountConnected={fetchConnectedAccounts} existingAccounts={accounts.length} />
         </CardContent>
       </Card>
+
+      {/* Multi Account Connection Dialog */}
+      <MultiAccountDialog
+        isOpen={showMultiAccountDialog}
+        onClose={() => setShowMultiAccountDialog(false)}
+        onAccountConnected={() => {
+          fetchConnectedAccounts()
+          setShowMultiAccountDialog(false)
+        }}
+        existingAccounts={accounts.length}
+      />
     </TooltipProvider>
   )
 }

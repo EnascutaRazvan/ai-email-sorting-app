@@ -336,6 +336,11 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                   {selectedEmails.size} selected
                 </Badge>
               )}
+              {accounts.length > 1 && (
+                <Badge variant="outline" className="ml-2 text-xs border-green-300 bg-green-50 text-green-700">
+                  {accounts.length} accounts
+                </Badge>
+              )}
             </CardTitle>
             <div className="flex items-center space-x-2">
               {selectedEmails.size > 0 && (

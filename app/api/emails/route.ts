@@ -34,6 +34,11 @@ export async function GET(request: NextRequest) {
 
     const connectedAccountIds = connectedAccounts.map((acc) => acc.id)
 
+    if (connectedAccountIds.length === 0) {
+      // No connected accounts, return empty result
+      return NextResponse.json({ success: true, emails: [] })
+    }
+
     // Only show emails from currently connected accounts
     let query = supabase
       .from("emails")

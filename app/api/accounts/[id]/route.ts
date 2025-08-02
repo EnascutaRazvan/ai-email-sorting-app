@@ -40,7 +40,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({
       success: true,
-      message: "Account removed successfully.",
+      message: "Account removed successfully. Emails from this account are now hidden.",
     })
   } catch (error) {
     console.error("API error:", error)
