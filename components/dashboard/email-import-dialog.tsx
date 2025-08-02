@@ -6,158 +6,136 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CalendarIcon, Download, Loader2 } from "lucide-react"
+import { CalendarIcon, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { toast } from "sonner"
 
 interface EmailImportDialogProps {
-  accounts: Array<{ id: string; email: string }>
-  onImportComplete: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  accountId: string
+  accountEmail: string
 }
 
-export function EmailImportDialog({ accounts, onImportComplete }: EmailImportDialogProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function EmailImportDialog({ open, onOpenChange, accountId, accountEmail }: EmailImportDialogProps) {
   const [isImporting, setIsImporting] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState<string>("")
-  const [dateFrom, setDateFrom] = useState<Date | undefined>()
-  const [dateTo, setDateTo] = useState<Date | undefined>()
+  const [startDate, setStartDate] = useState<Date>()
+  const [endDate, setEndDate] = useState<Date>()
 
   const handleImport = async () => {
-    if (!selectedAccount) {
-      showErrorToast("Please select an account", "Import Error")
-      return
-    }
-
     setIsImporting(true)
 
     try {
       const response = await fetch("/api/emails/import", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          accountId: selectedAccount,
-          dateFrom: dateFrom?.toISOString(),
-          dateTo: dateTo?.toISOString(),
+          accountId,
+          startDate: startDate?.toISOString(),
+          endDate: endDate?.toISOString(),
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        showSuccessToast(
-          "Import Complete",
-          `Successfully imported ${data.imported} emails out of ${data.processed} processed`,
-        )
-        onImportComplete()
-        setIsOpen(false)
-        resetForm()
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to import emails")
+      if (!response.ok) {
+        throw new Error("Failed to start import")
       }
+
+      const data = await response.json()
+
+      toast.success("Email import started successfully!", {
+        description: "Your emails are being imported in the background.",
+      })
+
+      onOpenChange(false)
+
+      // Reset form
+      setStartDate(undefined)
+      setEndDate(undefined)
     } catch (error) {
-      showErrorToast(error, "Email Import")
+      console.error("Import error:", error)
+      toast.error("Failed to start email import", {
+        description: "Please try again later.",
+      })
     } finally {
       setIsImporting(false)
     }
   }
 
-  const resetForm = () => {
-    setSelectedAccount("")
-    setDateFrom(undefined)
-    setDateTo(undefined)
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-          <Download className="mr-2 h-4 w-4" />
-          Import Emails
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-white">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px] bg-white">
         <DialogHeader>
-          <DialogTitle className="text-gray-900">Import Emails</DialogTitle>
-          <DialogDescription className="text-gray-600">
-            Import emails from your connected Gmail accounts with optional date range filtering.
+          <DialogTitle>Import Emails</DialogTitle>
+          <DialogDescription>
+            Import emails from {accountEmail}. You can optionally specify a date range to limit the import.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Account Selection */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-700">Select Account</Label>
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose an account to import from" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date Range Selection */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-gray-700">Date Range (Optional)</Label>
-            <div className="grid grid-cols-2 gap-3">
-              {/* From Date */}
-              <div className="space-y-2">
-                <Label className="text-xs text-gray-600">From Date</Label>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label>Date Range (Optional)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="start-date" className="text-sm text-gray-600">
+                  Start Date
+                </Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="start-date"
                       variant="outline"
-                      className={cn("w-full justify-start text-left font-normal", !dateFrom && "text-muted-foreground")}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground",
+                      )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFrom ? format(dateFrom, "MMM d, yyyy") : "Start date"}
+                      {startDate ? format(startDate, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
                     <Calendar
                       mode="single"
-                      selected={dateFrom}
-                      onSelect={setDateFrom}
-                      disabled={(date) => date > new Date() || (dateTo && date > dateTo)}
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      disabled={(date) => date > new Date() || (endDate && date > endDate)}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
 
-              {/* To Date */}
-              <div className="space-y-2">
-                <Label className="text-xs text-gray-600">To Date</Label>
+              <div>
+                <Label htmlFor="end-date" className="text-sm text-gray-600">
+                  End Date
+                </Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
+                      id="end-date"
                       variant="outline"
-                      className={cn("w-full justify-start text-left font-normal", !dateTo && "text-muted-foreground")}
+                      className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateTo ? format(dateTo, "MMM d, yyyy") : "End date"}
+                      {endDate ? format(endDate, "PPP") : "Pick a date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
                     <Calendar
                       mode="single"
-                      selected={dateTo}
-                      onSelect={setDateTo}
-                      disabled={(date) => date > new Date() || (dateFrom && date < dateFrom)}
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      disabled={(date) => date > new Date() || (startDate && date < startDate)}
                       initialFocus
                     />
                   </PopoverContent>
@@ -165,52 +143,33 @@ export function EmailImportDialog({ accounts, onImportComplete }: EmailImportDia
               </div>
             </div>
 
-            {/* Clear Date Range */}
-            {(dateFrom || dateTo) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setDateFrom(undefined)
-                  setDateTo(undefined)
-                }}
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                Clear date range
-              </Button>
+            {(startDate || endDate) && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStartDate(undefined)
+                    setEndDate(undefined)
+                  }}
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Clear dates
+                </Button>
+              </div>
             )}
-          </div>
-
-          {/* Import Info */}
-          <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800">
-            <p className="font-medium mb-1">Import Details:</p>
-            <ul className="text-xs space-y-1">
-              <li>• Emails will be automatically categorized using AI</li>
-              <li>• Duplicates will be skipped</li>
-              <li>• Original emails will be archived in Gmail</li>
-              {!dateFrom && !dateTo && <li>• All emails since account connection will be imported</li>}
-            </ul>
           </div>
         </div>
 
-        <div className="flex justify-end space-x-2">
-          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isImporting}>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isImporting}>
             Cancel
           </Button>
-          <Button onClick={handleImport} disabled={isImporting || !selectedAccount}>
-            {isImporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Import Emails
-              </>
-            )}
+          <Button onClick={handleImport} disabled={isImporting}>
+            {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isImporting ? "Importing..." : "Start Import"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

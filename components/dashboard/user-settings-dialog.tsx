@@ -6,18 +6,19 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Settings, Loader2, Zap } from "lucide-react"
-import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
+import { Loader2, Settings } from "lucide-react"
+import { toast } from "sonner"
 
 interface UserSettingsDialogProps {
-  onSettingsChange?: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 interface UserSettings {
@@ -25,8 +26,7 @@ interface UserSettings {
   emails_per_page: number
 }
 
-export function UserSettingsDialog({ onSettingsChange }: UserSettingsDialogProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function UserSettingsDialog({ open, onOpenChange }: UserSettingsDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [settings, setSettings] = useState<UserSettings>({
@@ -35,23 +35,22 @@ export function UserSettingsDialog({ onSettingsChange }: UserSettingsDialogProps
   })
 
   useEffect(() => {
-    if (isOpen) {
-      fetchSettings()
+    if (open) {
+      loadSettings()
     }
-  }, [isOpen])
+  }, [open])
 
-  const fetchSettings = async () => {
+  const loadSettings = async () => {
     setIsLoading(true)
     try {
       const response = await fetch("/api/user-settings")
-      if (response.ok) {
-        const data = await response.json()
-        setSettings(data.settings)
-      } else {
-        throw new Error("Failed to fetch settings")
-      }
+      if (!response.ok) throw new Error("Failed to load settings")
+
+      const data = await response.json()
+      setSettings(data.settings)
     } catch (error) {
-      showErrorToast(error, "Loading Settings")
+      console.error("Error loading settings:", error)
+      toast.error("Failed to load settings")
     } finally {
       setIsLoading(false)
     }
@@ -62,84 +61,62 @@ export function UserSettingsDialog({ onSettingsChange }: UserSettingsDialogProps
     try {
       const response = await fetch("/api/user-settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(settings),
       })
 
-      if (response.ok) {
-        showSuccessToast("Settings Saved", "Your preferences have been updated successfully")
-        onSettingsChange?.()
-        setIsOpen(false)
-      } else {
-        throw new Error("Failed to save settings")
-      }
+      if (!response.ok) throw new Error("Failed to save settings")
+
+      toast.success("Settings saved successfully!")
+      onOpenChange(false)
     } catch (error) {
-      showErrorToast(error, "Saving Settings")
+      console.error("Error saving settings:", error)
+      toast.error("Failed to save settings")
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700">
-          <Settings className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-white">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px] bg-white">
         <DialogHeader>
-          <DialogTitle className="text-gray-900 flex items-center">
-            <Settings className="mr-2 h-5 w-5" />
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
             User Settings
           </DialogTitle>
-          <DialogDescription className="text-gray-600">Configure your email management preferences.</DialogDescription>
+          <DialogDescription>Configure your email management preferences.</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading settings...</span>
+            <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="space-y-6 py-4">
-            {/* Auto-sync Toggle */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium text-gray-900 flex items-center">
-                    <Zap className="mr-2 h-4 w-4 text-blue-600" />
-                    Auto-sync Emails
-                  </Label>
-                  <p className="text-xs text-gray-600">Automatically import new emails every 15 minutes</p>
-                </div>
-                <Switch
-                  checked={settings.auto_sync_enabled}
-                  onCheckedChange={(checked) => setSettings({ ...settings, auto_sync_enabled: checked })}
-                />
+          <div className="grid gap-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Auto-sync emails</Label>
+                <div className="text-sm text-gray-600">Automatically sync emails every 15 minutes</div>
               </div>
-
-              {!settings.auto_sync_enabled && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-xs text-amber-800">
-                    <strong>Note:</strong> With auto-sync disabled, you'll need to manually import emails to see new
-                    messages in your dashboard.
-                  </p>
-                </div>
-              )}
+              <Switch
+                checked={settings.auto_sync_enabled}
+                onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, auto_sync_enabled: checked }))}
+              />
             </div>
 
-            {/* Emails per page */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-900">Emails per Page</Label>
+              <Label className="text-base">Emails per page</Label>
               <Select
                 value={settings.emails_per_page.toString()}
-                onValueChange={(value) => setSettings({ ...settings, emails_per_page: Number.parseInt(value) })}
+                onValueChange={(value) => setSettings((prev) => ({ ...prev, emails_per_page: Number.parseInt(value) }))}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white">
                   <SelectItem value="5">5 emails</SelectItem>
                   <SelectItem value="10">10 emails</SelectItem>
                   <SelectItem value="15">15 emails</SelectItem>
@@ -147,34 +124,20 @@ export function UserSettingsDialog({ onSettingsChange }: UserSettingsDialogProps
                   <SelectItem value="50">50 emails</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-600">Number of emails to display per page in the email list</p>
-            </div>
-
-            {/* Performance Note */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-blue-800">
-                <strong>Performance Tip:</strong> Lower values provide faster loading times, especially with large email
-                collections.
-              </p>
+              <div className="text-sm text-gray-600">Number of emails to display per page</div>
             </div>
           </div>
         )}
 
-        <div className="flex justify-end space-x-2">
-          <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isSaving}>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
           <Button onClick={saveSettings} disabled={isSaving || isLoading}>
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Settings"
-            )}
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSaving ? "Saving..." : "Save Settings"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
