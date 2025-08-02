@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { cn } from "@/lib/utils"
+
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -88,27 +90,22 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
   const [showUnsubscribeResults, setShowUnsubscribeResults] = useState(false)
   const [unsubscribeStats, setUnsubscribeStats] = useState({ processed: 0, successful: 0 })
 
-  useEffect(() => {
-    if (session?.user?.id) {
-      fetchEmails()
-    }
-  }, [session])
+  // Use ref to prevent multiple simultaneous fetches
+  const fetchingRef = useRef(false)
+  const initialFetchDone = useRef(false)
 
-  useEffect(() => {
-    setFilters((prev) => ({ ...prev, categoryId: selectedCategory }))
-  }, [selectedCategory])
+  // Memoized fetch function to prevent unnecessary re-renders
+  const fetchEmails = useCallback(async () => {
+    if (fetchingRef.current || !session?.user?.id) return
 
-  useEffect(() => {
-    fetchEmailsWithFilters()
-  }, [filters])
-
-  const fetchEmails = async () => {
+    fetchingRef.current = true
     try {
       const response = await fetch("/api/emails")
       if (response.ok) {
         const data = await response.json()
         setEmails(data.emails || [])
         setFilteredEmails(data.emails || [])
+        initialFetchDone.current = true
       } else {
         throw new Error("Failed to fetch emails")
       }
@@ -116,18 +113,21 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
       showErrorToast(error, "Fetching Emails")
     } finally {
       setIsLoading(false)
+      fetchingRef.current = false
     }
-  }
+  }, [session?.user?.id])
 
-  const fetchEmailsWithFilters = async () => {
-    if (!session?.user?.id) return
+  // Memoized fetch with filters function
+  const fetchEmailsWithFilters = useCallback(async () => {
+    if (!session?.user?.id || fetchingRef.current) return
 
+    fetchingRef.current = true
     try {
       const params = new URLSearchParams()
 
       if (filters.search) params.append("search", filters.search)
-      if (filters.categoryId) params.append("category", filters.categoryId)
-      if (filters.accountId) params.append("account", filters.accountId)
+      if (filters.categoryId && filters.categoryId !== "all") params.append("category", filters.categoryId)
+      if (filters.accountId && filters.accountId !== "all") params.append("account", filters.accountId)
       if (filters.dateFrom) params.append("dateFrom", filters.dateFrom.toISOString())
       if (filters.dateTo) params.append("dateTo", filters.dateTo.toISOString())
       if (filters.sender) params.append("sender", filters.sender)
@@ -141,8 +141,29 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
       }
     } catch (error) {
       showErrorToast(error, "Filtering Emails")
+    } finally {
+      fetchingRef.current = false
     }
-  }
+  }, [session?.user?.id, filters])
+
+  // Initial fetch only once when session is available
+  useEffect(() => {
+    if (session?.user?.id && !initialFetchDone.current) {
+      fetchEmails()
+    }
+  }, [session?.user?.id, fetchEmails])
+
+  // Update filters when selectedCategory changes
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, categoryId: selectedCategory }))
+  }, [selectedCategory])
+
+  // Fetch with filters when filters change (but not on initial load)
+  useEffect(() => {
+    if (initialFetchDone.current) {
+      fetchEmailsWithFilters()
+    }
+  }, [filters, fetchEmailsWithFilters])
 
   const handleRecategorizeEmails = async () => {
     setIsRecategorizing(true)
@@ -295,14 +316,14 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
   if (isLoading) {
     return (
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full">
+      <Card className="glass h-full">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-gray-900">Emails</CardTitle>
+          <CardTitle className="text-base font-semibold text-foreground">Emails</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Loading emails...</span>
+            <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading emails...</span>
           </div>
         </CardContent>
       </Card>
@@ -311,17 +332,17 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
 
   return (
     <TooltipProvider>
-      <Card className="shadow-sm border-0 bg-white/50 backdrop-blur-sm h-full flex flex-col">
+      <Card className="glass h-full flex flex-col">
         <CardHeader className="pb-3 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-gray-900 flex items-center">
-              <Mail className="mr-2 h-4 w-4 text-blue-600" />
-              Emails
-              <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700 text-xs">
+            <CardTitle className="text-base font-semibold text-foreground flex items-center">
+              <Mail className="mr-2 h-4 w-4 text-primary" />
+              <span className="hidden sm:inline">Emails</span>
+              <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground text-xs">
                 {filteredEmails.length}
               </Badge>
               {selectedEmails.size > 0 && (
-                <Badge variant="default" className="ml-2 bg-blue-600 text-white text-xs">
+                <Badge variant="default" className="ml-2 bg-primary text-primary-foreground text-xs">
                   {selectedEmails.size} selected
                 </Badge>
               )}
@@ -334,20 +355,20 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                     variant="outline"
                     size="sm"
                     disabled={isDeleting}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 bg-transparent"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 bg-background border-border"
                   >
                     {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    Delete
+                    <span className="hidden sm:inline ml-1">Delete</span>
                   </Button>
                   <Button
                     onClick={handleBulkUnsubscribe}
                     variant="outline"
                     size="sm"
                     disabled={isUnsubscribing}
-                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 bg-transparent"
+                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950 bg-background border-border"
                   >
                     {isUnsubscribing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                    {isUnsubscribing ? "Processing..." : "Unsubscribe"}
+                    <span className="hidden sm:inline ml-1">{isUnsubscribing ? "Processing..." : "Unsubscribe"}</span>
                   </Button>
                 </>
               )}
@@ -355,7 +376,7 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                 onClick={fetchEmailsWithFilters}
                 variant="ghost"
                 size="sm"
-                className="text-gray-500 hover:text-gray-700"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
@@ -368,9 +389,9 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
               <Checkbox
                 checked={selectedEmails.size === filteredEmails.length}
                 onCheckedChange={handleSelectAll}
-                className="data-[state=checked]:bg-blue-600"
+                className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
               />
-              <span className="text-sm text-gray-600">Select all ({filteredEmails.length} emails)</span>
+              <span className="text-sm text-muted-foreground">Select all ({filteredEmails.length} emails)</span>
             </div>
           )}
 
@@ -387,11 +408,11 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
         <CardContent className="flex-1 min-h-0 p-0">
           {filteredEmails.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-                <Mail className="h-8 w-8 text-gray-400" />
+              <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
+                <Mail className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No emails found</h3>
-              <p className="text-sm text-gray-600 max-w-sm">
+              <h3 className="text-lg font-semibold text-foreground mb-2">No emails found</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
                 Try adjusting your filters or import emails from your connected Gmail accounts
               </p>
             </div>
@@ -401,13 +422,14 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                 {filteredEmails.map((email) => (
                   <div
                     key={email.id}
-                    className={`group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-200 ${
+                    className={cn(
+                      "group relative p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md animate-fade-in",
                       selectedEmails.has(email.id)
-                        ? "bg-blue-50 border-blue-300"
+                        ? "bg-primary/5 border-primary/20"
                         : email.is_read
-                          ? "bg-white/50 border-gray-200/50"
-                          : "bg-gradient-to-r from-blue-50/50 to-white border-blue-200/50"
-                    }`}
+                          ? "bg-card border-border hover:border-border/80"
+                          : "bg-card border-primary/20 hover:border-primary/40",
+                    )}
                   >
                     <div className="flex items-start space-x-3">
                       <div className="flex items-center space-x-3">
@@ -415,11 +437,11 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                           checked={selectedEmails.has(email.id)}
                           onCheckedChange={(checked) => handleSelectEmail(email.id, checked as boolean)}
                           onClick={(e) => e.stopPropagation()}
-                          className="data-[state=checked]:bg-blue-600"
+                          className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                         />
                         <Avatar className="h-10 w-10 flex-shrink-0">
                           <AvatarImage src="/placeholder.svg" alt={getSenderName(email.sender)} />
-                          <AvatarFallback className="bg-gradient-to-br from-gray-500 to-gray-600 text-white text-sm">
+                          <AvatarFallback className="bg-muted text-muted-foreground text-sm">
                             {getSenderInitials(email.sender)}
                           </AvatarFallback>
                         </Avatar>
@@ -429,7 +451,10 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center space-x-2 min-w-0 flex-1">
                             <p
-                              className={`text-sm truncate ${email.is_read ? "text-gray-700" : "font-semibold text-gray-900"}`}
+                              className={cn(
+                                "text-sm truncate",
+                                email.is_read ? "text-muted-foreground" : "font-semibold text-foreground",
+                              )}
                             >
                               {getSenderName(email.sender)}
                             </p>
@@ -438,7 +463,10 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                             {email.account && (
                               <Tooltip>
                                 <TooltipTrigger>
-                                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs bg-muted text-muted-foreground border-border"
+                                  >
                                     {email.account.email.split("@")[0]}
                                   </Badge>
                                 </TooltipTrigger>
@@ -488,35 +516,38 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                           </div>
 
                           <div className="flex items-center space-x-2 flex-shrink-0">
-                            <div className="flex items-center text-xs text-gray-500">
+                            <div className="flex items-center text-xs text-muted-foreground">
                               <Clock className="h-3 w-3 mr-1" />
                               {formatDate(email.received_at)}
                             </div>
-                            {!email.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full"></div>}
+                            {!email.is_read && <div className="w-2 h-2 bg-primary rounded-full"></div>}
                           </div>
                         </div>
 
                         <h3
-                          className={`text-sm mb-2 line-clamp-1 ${email.is_read ? "text-gray-800" : "font-semibold text-gray-900"}`}
+                          className={cn(
+                            "text-sm mb-2 line-clamp-1",
+                            email.is_read ? "text-foreground" : "font-semibold text-foreground",
+                          )}
                         >
                           {email.subject}
                         </h3>
 
                         {/* AI Summary */}
                         {email.ai_summary && (
-                          <div className="bg-gradient-to-r from-purple-50/50 to-blue-50/50 rounded-md p-2 mb-2 border border-purple-100/50">
+                          <div className="bg-primary/5 rounded-md p-2 mb-2 border border-primary/10">
                             <div className="flex items-center mb-1">
-                              <Sparkles className="h-3 w-3 text-purple-600 mr-1" />
-                              <span className="text-xs font-medium text-purple-900">AI Summary</span>
+                              <Sparkles className="h-3 w-3 text-primary mr-1" />
+                              <span className="text-xs font-medium text-primary">AI Summary</span>
                             </div>
-                            <p className="text-xs text-purple-800 line-clamp-2 leading-relaxed">{email.ai_summary}</p>
+                            <p className="text-xs text-foreground line-clamp-2 leading-relaxed">{email.ai_summary}</p>
                           </div>
                         )}
 
-                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{email.snippet}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{email.snippet}</p>
 
                         {/* Email metadata */}
-                        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
                           <div className="flex items-center space-x-2">
                             <User className="h-3 w-3" />
                             <span className="truncate">{email.account?.email || "Unknown account"}</span>
@@ -530,7 +561,7 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                     </div>
 
                     {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-blue-50/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    <div className="absolute inset-0 bg-primary/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   </div>
                 ))}
               </div>
