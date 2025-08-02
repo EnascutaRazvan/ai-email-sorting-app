@@ -12,6 +12,7 @@ import { Mail, Clock, User, Sparkles, RefreshCw, MailOpen, Archive, Bot } from "
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { EmailFilters, type EmailFilters as EmailFiltersType } from "./email-filters"
+import { SuggestedCategoryBadge } from "./suggested-category-badge"
 
 interface Email {
   id: string
@@ -21,6 +22,7 @@ interface Email {
   ai_summary: string
   received_at: string
   is_read: boolean
+  suggested_category_name?: string
   category?: {
     id: string
     name: string
@@ -309,6 +311,17 @@ export function EmailList({ selectedCategory, accounts, categories, onEmailsChan
                             )}
 
                             {/* AI Suggested Category */}
+                            {email.suggested_category_name && !email.category && (
+                              <SuggestedCategoryBadge
+                                categoryName={email.suggested_category_name}
+                                onCategoryCreated={() => {
+                                  fetchEmailsWithFilters()
+                                  onEmailsChange?.()
+                                }}
+                              />
+                            )}
+
+                            {/* Existing suggested category (if from existing categories) */}
                             {email.suggested_category && (
                               <Tooltip>
                                 <TooltipTrigger>

@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         const aiSummary = await generateEmailSummary(subject, from, emailBody)
 
         // Categorize email with AI using Groq
-        const categoryId = await categorizeEmailWithAI(subject, from, emailBody, categories)
+        const { categoryId, suggestedCategory } = await categorizeEmailWithAI(subject, from, emailBody, categories)
 
         // Store email in database
         const { error: insertError } = await supabase.from("emails").insert({
@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
           is_read: !message.labelIds.includes("UNREAD"),
           gmail_thread_id: message.threadId,
           email_body: emailBody,
+          suggested_category_name: suggestedCategory, // Add this field
         })
 
         if (insertError) {
@@ -255,15 +256,36 @@ async function categorizeEmailWithAI(
   from: string,
   body: string,
   categories: any[],
-): Promise<string | null> {
-  if (!categories.length) return null
+): Promise<{ categoryId: string | null; suggestedCategory: string | null }> {
+  if (!categories.length) {
+    // If no categories exist, suggest a category name
+    try {
+      const { text } = await generateText({
+        model: groq("llama-3.1-8b-instant"),
+        prompt: `Analyze this email and suggest a single category name that would be appropriate for organizing it. Respond with ONLY the category name (1-2 words), nothing else.
+
+Email to categorize:
+Subject: ${subject}
+From: ${from}
+Body: ${body.substring(0, 1000)}...
+
+Suggested category name:`,
+        maxTokens: 10,
+      })
+
+      return { categoryId: null, suggestedCategory: text.trim() }
+    } catch (error) {
+      console.error("Error suggesting category:", error)
+      return { categoryId: null, suggestedCategory: null }
+    }
+  }
 
   try {
     const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
 
     const { text } = await generateText({
       model: groq("llama-3.1-8b-instant"),
-      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. Respond with ONLY the category name, nothing else.
+      prompt: `You are an email categorization assistant. Analyze the email and choose the most appropriate category from the list below. If none fit well, respond with "SUGGEST:" followed by a new category name. Otherwise, respond with ONLY the category name, nothing else.
 
 Available Categories:
 ${categoryList}
@@ -277,16 +299,23 @@ Category:`,
       maxTokens: 20,
     })
 
+    const response = text.trim()
+
+    if (response.startsWith("SUGGEST:")) {
+      const suggestedName = response.replace("SUGGEST:", "").trim()
+      return { categoryId: null, suggestedCategory: suggestedName }
+    }
+
     const selectedCategory = categories.find(
       (cat) =>
-        cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
-        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
+        cat.name.toLowerCase().includes(response.toLowerCase()) ||
+        response.toLowerCase().includes(cat.name.toLowerCase()),
     )
 
-    return selectedCategory?.id || null
+    return { categoryId: selectedCategory?.id || null, suggestedCategory: null }
   } catch (error) {
     console.error("Error categorizing email:", error)
-    return null
+    return { categoryId: null, suggestedCategory: null }
   }
 }
 

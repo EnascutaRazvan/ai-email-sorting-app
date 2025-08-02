@@ -1,96 +1,52 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { createRouter } from "next-connect"
+import type { NextApiRequest, NextApiResponse } from "next"
+import { supabase } from "@/lib/supabase"
+import { getSession } from "next-auth/react"
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const router = createRouter<NextApiRequest, NextApiResponse>()
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const categoryId = searchParams.get("category")
-    const accountId = searchParams.get("account")
-    const dateFrom = searchParams.get("dateFrom")
-    const dateTo = searchParams.get("dateTo")
-    const sender = searchParams.get("sender")
-    const search = searchParams.get("search")
-
-    let query = supabase
-      .from("emails")
-      .select(`
-        *,
-        categories(id, name, color),
-        user_accounts(email, name)
-      `)
-      .eq("user_id", session.user.id)
-      .order("received_at", { ascending: false })
-      .limit(100)
-
-    // Apply filters
-    if (categoryId && categoryId !== "all") {
-      if (categoryId === "uncategorized") {
-        query = query.is("category_id", null)
-      } else {
-        query = query.eq("category_id", categoryId)
-      }
-    }
-
-    if (accountId) {
-      query = query.eq("account_id", accountId)
-    }
-
-    if (dateFrom) {
-      query = query.gte("received_at", dateFrom)
-    }
-
-    if (dateTo) {
-      query = query.lte("received_at", dateTo)
-    }
-
-    if (sender) {
-      query = query.ilike("sender", `%${sender}%`)
-    }
-
-    if (search) {
-      query = query.or(
-        `subject.ilike.%${search}%,sender.ilike.%${search}%,snippet.ilike.%${search}%,ai_summary.ilike.%${search}%`,
-      )
-    }
-
-    const { data: emails, error } = await query
-
-    if (error) {
-      console.error("Error fetching emails:", error)
-      return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
-    }
-
-    // Transform the data to include account and category information
-    const transformedEmails = emails.map((email) => ({
-      ...email,
-      category: email.categories
-        ? {
-            id: email.categories.id,
-            name: email.categories.name,
-            color: email.categories.color,
-          }
-        : null,
-      account: email.user_accounts
-        ? {
-            email: email.user_accounts.email,
-            name: email.user_accounts.name,
-          }
-        : null,
-    }))
-
-    return NextResponse.json({ success: true, emails: transformedEmails })
-  } catch (error) {
-    console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+router.get(async (req, res) => {
+  const session = await getSession({ req })
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized" })
   }
-}
+
+  const limit = Number.parseInt(req.query.limit as string) || 10
+  const offset = Number.parseInt(req.query.offset as string) || 0
+
+  const { data: emails, error } = await supabase
+    .from("emails")
+    .select(`
+      *,
+      suggested_category_name,
+      categories:category_id (
+        id,
+        name,
+        color
+      ),
+      user_accounts:account_id (
+        email,
+        name
+      )
+    `)
+    .eq("user_id", session.user.id)
+    .order("received_at", { ascending: false })
+    .limit(limit)
+    .range(offset, offset + limit - 1)
+
+  if (error) {
+    return res.status(500).json({ error: error.message })
+  }
+
+  res.status(200).json({ emails })
+})
+
+export default router.handler({
+  onError: (err, req, res) => {
+    console.error(err.stack)
+    res.status(500).end("Something broke!")
+  },
+  onNoMatch: (req, res) => {
+    res.status(404).end("Page not found")
+  },
+})

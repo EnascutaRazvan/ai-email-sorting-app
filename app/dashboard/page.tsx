@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { ConnectedAccounts } from "@/components/dashboard/connected-accounts"
 import { Categories } from "@/components/dashboard/categories"
 import { EmailList } from "@/components/dashboard/email-list"
+import { DefaultCategoriesModal } from "@/components/dashboard/default-categories-modal"
 
 interface Account {
   id: string
@@ -26,6 +27,8 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
+  const [showDefaultCategoriesModal, setShowDefaultCategoriesModal] = useState(false)
+  const [hasCheckedDefaultCategories, setHasCheckedDefaultCategories] = useState(false)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -54,6 +57,20 @@ export default function DashboardPage() {
       window.removeEventListener("accountRemoved", handleAccountRemoved as EventListener)
     }
   }, [])
+
+  useEffect(() => {
+    if (session?.user?.id && categories.length === 0 && !hasCheckedDefaultCategories) {
+      // Small delay to ensure categories have been fetched
+      const timer = setTimeout(() => {
+        if (categories.length === 0) {
+          setShowDefaultCategoriesModal(true)
+        }
+        setHasCheckedDefaultCategories(true)
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [session, categories, hasCheckedDefaultCategories])
 
   const fetchAccounts = async () => {
     try {
@@ -125,6 +142,14 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+      <DefaultCategoriesModal
+        isOpen={showDefaultCategoriesModal}
+        onClose={() => setShowDefaultCategoriesModal(false)}
+        onCategoriesCreated={() => {
+          fetchCategories()
+          setRefreshKey((prev) => prev + 1)
+        }}
+      />
     </DashboardLayout>
   )
 }
