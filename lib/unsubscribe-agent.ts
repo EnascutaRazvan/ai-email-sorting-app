@@ -1,343 +1,292 @@
+import puppeteer, { type Browser, type Page } from "puppeteer"
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
-import puppeteer from "puppeteer"
 
 interface UnsubscribeLink {
   url: string
   text: string
-  method: "GET" | "POST"
+  method: string // "GET" or "POST" or "MAILTO"
 }
 
 interface UnsubscribeResult {
+  emailId: string
+  subject: string
+  sender: string
   success: boolean
-  method: string
-  error?: string
-  details?: string
-  screenshot?: string
+  summary: string
+  details: Array<{
+    link: { url: string; text: string; method: string }
+    result: {
+      success: boolean
+      method: string
+      error?: string
+      details?: string
+      screenshot?: string
+    }
+  }>
 }
 
 export class UnsubscribeAgent {
-  private model = groq("llama-3.3-70b-versatile")
+  private browser: Browser | null = null
+  private model = groq("llama-3.3-70b-versatile") // Using the specified private model
 
-  async extractUnsubscribeLinks(emailContent: string): Promise<UnsubscribeLink[]> {
-    try {
-      const { text } = await generateText({
-        model: this.model,
-        prompt: `
-          Analyze this email content and extract all unsubscribe links. Look for:
-          - Links with text containing "unsubscribe", "opt out", "remove", "stop emails"
-          - Links in footers or at the end of emails
-          - mailto: links for unsubscribe
-          - Any other links that appear to be for unsubscribing
+  constructor() {}
 
-          Email content:
-          ${emailContent}
-
-          Return a JSON array of objects with this format:
-          [
-            {
-              "url": "the full URL",
-              "text": "the link text or surrounding context",
-              "method": "GET" or "POST" (guess based on context)
-            }
-          ]
-
-          If no unsubscribe links are found, return an empty array.
-        `,
+  private async initializeBrowser() {
+    if (!this.browser) {
+      this.browser = await puppeteer.launch({
+        headless: true, // Set to false for debugging UI
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
       })
-
-      try {
-        const parsed = JSON.parse(text)
-        return Array.isArray(parsed) ? parsed : []
-      } catch {
-        // If JSON parsing fails, try to extract URLs manually
-        return this.fallbackLinkExtraction(emailContent)
-      }
-    } catch (error) {
-      console.error("Error extracting unsubscribe links:", error)
-      return this.fallbackLinkExtraction(emailContent)
     }
   }
 
-  private fallbackLinkExtraction(emailContent: string): UnsubscribeLink[] {
+  private async closeBrowser() {
+    if (this.browser) {
+      await this.browser.close()
+      this.browser = null
+    }
+  }
+
+  async extractUnsubscribeLinks(htmlContent: string): Promise<UnsubscribeLink[]> {
     const links: UnsubscribeLink[] = []
 
-    // Look for common unsubscribe patterns
-    const unsubscribePatterns = [
-      /https?:\/\/[^\s<>"]+unsubscribe[^\s<>"]*/gi,
-      /https?:\/\/[^\s<>"]+opt-out[^\s<>"]*/gi,
-      /https?:\/\/[^\s<>"]+remove[^\s<>"]*/gi,
-      /mailto:[^\s<>"]+\?subject=[^\s<>"]*unsubscribe[^\s<>"]*/gi,
-    ]
+    // Regex for mailto links
+    const mailtoRegex =
+      /<a[^>]*href=["']mailto:([^?"']+\?subject=[^"']*(?:&amp;|&)?body=[^"']*(?:unsubscribe|opt-out)[^"']*)["'][^>]*>(.*?)<\/a>/gim
+    let match
+    while ((match = mailtoRegex.exec(htmlContent)) !== null) {
+      links.push({ url: match[1], text: match[2].trim(), method: "MAILTO" })
+    }
 
-    unsubscribePatterns.forEach((pattern) => {
-      const matches = emailContent.match(pattern)
-      if (matches) {
-        matches.forEach((url) => {
-          links.push({
-            url: url.trim(),
-            text: "Unsubscribe",
-            method: "GET",
-          })
-        })
+    // Regex for HTTP/HTTPS links containing "unsubscribe" or "opt-out"
+    const httpRegex = /<a[^>]*href=["'](https?:\/\/[^"']*(?:unsubscribe|opt-out)[^"']*)["'][^>]*>(.*?)<\/a>/gim
+    while ((match = httpRegex.exec(htmlContent)) !== null) {
+      links.push({ url: match[1], text: match[2].trim(), method: "GET" })
+    }
+
+    // Fallback: Look for any link with "unsubscribe" or "opt-out" in its text, even if URL doesn't contain it
+    const genericLinkRegex = /<a[^>]*href=["'](https?:\/\/[^"']*)["'][^>]*>(.*?(?:unsubscribe|opt-out).*?)<\/a>/gim
+    while ((match = genericLinkRegex.exec(htmlContent)) !== null) {
+      if (!links.some((l) => l.url === match[1])) {
+        links.push({ url: match[1], text: match[2].trim(), method: "GET" })
       }
-    })
+    }
 
     return links
   }
 
-  async processUnsubscribe(link: UnsubscribeLink): Promise<UnsubscribeResult> {
-    let browser: puppeteer.Browser | null = null
-    let page: puppeteer.Page | null = null
+  async processUnsubscribe(
+    emailId: string,
+    subject: string,
+    sender: string,
+    htmlContent: string,
+  ): Promise<UnsubscribeResult> {
+    await this.initializeBrowser()
+    const result: UnsubscribeResult = {
+      emailId,
+      subject,
+      sender,
+      success: false,
+      summary: "No unsubscribe link found or processed.",
+      details: [],
+    }
 
-    try {
-      // Handle mailto links
-      if (link.url.startsWith("mailto:")) {
-        return {
-          success: true,
-          method: "mailto",
-          details: `Unsubscribe email would be sent to: ${link.url}`,
-        }
+    const unsubscribeLinks = await this.extractUnsubscribeLinks(htmlContent)
+
+    if (unsubscribeLinks.length === 0) {
+      result.summary = "No unsubscribe link found in email."
+      return result
+    }
+
+    for (const link of unsubscribeLinks) {
+      const detailResult: UnsubscribeResult["details"][0] = {
+        link,
+        result: { success: false, method: link.method },
       }
 
-      // Launch browser for actual web navigation
-      browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--single-process",
-          "--disable-gpu",
-        ],
-      })
-
-      // This promise will resolve with a new page if one is created (e.g., pop-up, new tab)
-      const newPagePromise = new Promise<puppeteer.Page>((resolve) => {
-        browser!.once("targetcreated", async (target) => {
-          if (target.type() === "page") {
-            const newPage = await target.page()
-            // Wait for the new page to load its DOM content before resolving
-            await newPage.waitForNavigation({ waitUntil: "domcontentloaded" }).catch(() => {})
-            resolve(newPage)
-          }
-        })
-      })
-
-      page = await browser.newPage()
-      await page.setUserAgent(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      )
-
-      // Race the initial navigation with the possibility of a new page opening
-      const resultPage = await Promise.race([
-        page.goto(link.url, { waitUntil: "domcontentloaded", timeout: 30000 }).then(() => page),
-        newPagePromise,
-      ])
-
-      // Use the page that won the race
-      page = resultPage
-
-      // Ensure page is not null before proceeding
-      if (!page) {
-        throw new Error("Page object is null after navigation attempts.")
+      if (link.method === "MAILTO") {
+        detailResult.result.success = true
+        detailResult.result.details = `Mailto link detected: ${link.url}. Please send an email manually.`
+        result.success = true
+        result.summary = "Mailto link found. Manual email required."
+        result.details.push(detailResult)
+        continue
       }
 
-      // Wait a bit for content to render after navigation
-      await page.waitForTimeout(2000)
-
-      // Take a screenshot for debugging
-      const screenshot = await page.screenshot({ encoding: "base64" })
-
-      // Get page content for AI analysis
-      const pageContent = await page.content()
-      const pageText = await page.evaluate(() => document.body.innerText)
-
-      // Use AI to analyze the page and determine next steps
-      const { text: analysisText } = await generateText({
-        model: this.model,
-        prompt: `
-            You are an AI agent helping to unsubscribe from an email list. 
-            
-            Page URL: ${link.url}
-            Page text content: ${pageText.substring(0, 2000)}
-            
-            Analyze this unsubscribe page and determine what actions need to be taken:
-            1. Is this a simple confirmation page that just needs a button click?
-            2. Does it require filling out a form?
-            3. Are there checkboxes or dropdowns to interact with?
-            4. Is there a CAPTCHA present?
-            5. Does it require email confirmation?
-            
-            Look for elements like:
-            - "Confirm unsubscribe" buttons
-            - "Unsubscribe" buttons
-            - Email input fields
-            - Reason dropdowns/checkboxes
-            - Submit buttons
-            
-            Respond with a JSON object:
-            {
-              "action": "CLICK_BUTTON|FILL_FORM|EMAIL_CONFIRMATION|CAPTCHA_REQUIRED|ALREADY_UNSUBSCRIBED|ERROR",
-              "elements": [
-                {
-                  "type": "button|input|select|checkbox",
-                  "selector": "CSS selector or text to find element",
-                  "action": "click|type|select",
-                  "value": "value to enter if needed"
-                }
-              ],
-              "confidence": 0.0-1.0,
-              "message": "description of what was found and what needs to be done"
-            }
-          `,
-      })
-
-      let analysis
+      let page: Page | null = null
       try {
-        analysis = JSON.parse(analysisText)
-      } catch {
-        analysis = {
-          action: "ERROR",
-          elements: [],
-          confidence: 0,
-          message: "Failed to parse AI analysis",
+        // Create a new page for each unsubscribe attempt to ensure isolation
+        page = await this.browser!.newPage()
+        page.setDefaultNavigationTimeout(60000) // 60 seconds timeout
+
+        // Listen for new pages (e.g., if a link opens in a new tab)
+        const newPagePromise = new Promise<Page>((resolve) =>
+          this.browser!.once("targetcreated", (target) => {
+            if (target.type() === "page") {
+              target.page().then(resolve)
+            }
+          }),
+        )
+
+        // Attempt to navigate, but also race against a new page opening
+        const navigationPromise = page.goto(link.url, { waitUntil: "domcontentloaded" })
+
+        const navigatedPage = await Promise.race([navigationPromise, newPagePromise])
+
+        if (navigatedPage && navigatedPage !== page) {
+          // If a new page opened, close the old one and switch to the new one
+          await page.close()
+          page = navigatedPage as Page
+          await page.bringToFront()
+          await page.waitForLoadState("domcontentloaded")
+        } else if (!navigatedPage) {
+          // If navigation failed and no new page, try to get the current page
+          const pages = await this.browser!.pages()
+          if (pages.length > 0) {
+            page = pages[0]
+            await page.bringToFront()
+            await page.waitForLoadState("domcontentloaded")
+          } else {
+            throw new Error("No active page found after navigation attempt.")
+          }
         }
-      }
 
-      // Execute the determined actions
-      let success = false
-      let details = analysis.message
+        // Add a small delay to ensure content renders
+        await page.waitForTimeout(2000)
 
-      if (analysis.action === "ALREADY_UNSUBSCRIBED") {
-        success = true
-        details = "Already unsubscribed or email not found in list"
-      } else if (analysis.action === "CLICK_BUTTON" && analysis.elements.length > 0) {
-        // Try to find and click unsubscribe buttons
-        for (const element of analysis.elements) {
-          if (element.action === "click") {
-            try {
-              // Try different methods to find the element
-              let elementHandle = null
+        const pageContent = await page.content()
+        const screenshot = await page.screenshot({ encoding: "base64" })
 
-              // Try by CSS selector first
-              try {
-                elementHandle = await page.$(element.selector)
-              } catch {}
+        const prompt = `
+          You are an AI agent designed to help users unsubscribe from email lists.
+          The user has provided the HTML content of an unsubscribe page.
+          Your goal is to identify the necessary action to unsubscribe and provide instructions.
 
-              // If not found, try by text content
-              if (!elementHandle) {
-                elementHandle = await page.evaluateHandle((text) => {
-                  const elements = Array.from(document.querySelectorAll('button, input[type="submit"], a'))
-                  return elements.find(
-                    (el) =>
-                      el.textContent?.toLowerCase().includes(text.toLowerCase()) ||
-                      el.getAttribute("value")?.toLowerCase().includes(text.toLowerCase()),
-                  )
-                }, element.selector)
-              }
+          Consider the following:
+          - Look for buttons with text like "Unsubscribe", "Confirm", "Opt-out".
+          - Look for forms that require an email address or a reason for unsubscribing.
+          - Identify if the page confirms successful unsubscription.
+          - Identify if the page requires a CAPTCHA or other complex interaction.
 
-              if (elementHandle && elementHandle.asElement()) {
-                await elementHandle.asElement()!.click()
-                await page.waitForTimeout(2000) // Wait for any redirects
-                success = true
-                details = `Successfully clicked: ${element.selector}`
+          HTML Content of the page:
+          ${pageContent}
+
+          Based on this HTML, what action should be taken to unsubscribe?
+          Provide a concise summary of the page and the required action.
+          If a form needs to be filled, specify the input fields (e.g., 'email', 'reason') and what values to provide (e.g., the user's email address: ${sender}).
+          If a button needs to be clicked, specify its text or a unique selector.
+          If it's already unsubscribed, state that.
+          If it requires a CAPTCHA or complex interaction, state that it requires manual intervention.
+
+          Output your response in a structured JSON format:
+          {
+            "summary": "A concise summary of the page and the required action.",
+            "action": {
+              "type": "click" | "fill_form" | "already_unsubscribed" | "manual_intervention",
+              "selector"?: "CSS selector for button or form",
+              "buttonText"?: "Text of the button to click",
+              "fields"?: { "fieldName": "value" }, // For fill_form type
+              "details"?: "Any additional details or instructions"
+            }
+          }
+        `
+
+        const { text: aiResponse } = await generateText({
+          model: this.model,
+          prompt: prompt,
+          temperature: 0.2,
+        })
+
+        const parsedResponse = JSON.parse(aiResponse)
+
+        detailResult.result.details = parsedResponse.summary
+        detailResult.result.screenshot = `data:image/png;base64,${screenshot}`
+
+        if (parsedResponse.action.type === "click") {
+          const selector = parsedResponse.action.selector || `button:contains('${parsedResponse.action.buttonText}')`
+          const button = await page.$(selector)
+          if (button) {
+            await button.click()
+            await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {}) // Wait for potential redirect
+            detailResult.result.success = true
+            detailResult.result.details += "\nClicked button."
+          } else {
+            detailResult.result.error = "Button not found."
+          }
+        } else if (parsedResponse.action.type === "fill_form") {
+          const formSelector = parsedResponse.action.selector || "form"
+          const form = await page.$(formSelector)
+          if (form && parsedResponse.action.fields) {
+            for (const fieldName in parsedResponse.action.fields) {
+              const value = parsedResponse.action.fields[fieldName]
+              const inputSelector = `[name="${fieldName}"], #${fieldName}, .${fieldName}`
+              const input = await form.$(inputSelector)
+              if (input) {
+                await input.type(value)
+              } else {
+                detailResult.result.error = `Input field ${fieldName} not found.`
                 break
               }
-            } catch (error) {
-              console.error(`Error clicking element ${element.selector}:`, error)
             }
-          }
-        }
-      } else if (analysis.action === "FILL_FORM" && analysis.elements.length > 0) {
-        // Handle form filling
-        for (const element of analysis.elements) {
-          try {
-            if (element.action === "type" && element.value) {
-              await page.type(element.selector, element.value)
-            } else if (element.action === "select" && element.value) {
-              await page.select(element.selector, element.value)
-            } else if (element.action === "click") {
-              await page.click(element.selector)
+            if (!detailResult.result.error) {
+              await Promise.all([
+                form.evaluate((f: HTMLFormElement) => f.submit()),
+                page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {}),
+              ])
+              detailResult.result.success = true
+              detailResult.result.details += "\nFilled form and submitted."
             }
-          } catch (error) {
-            console.error(`Error interacting with element ${element.selector}:`, error)
+          } else {
+            detailResult.result.error = "Form not found or no fields specified."
           }
+        } else if (parsedResponse.action.type === "already_unsubscribed") {
+          detailResult.result.success = true
+          detailResult.result.details += "\nAlready unsubscribed."
+        } else if (parsedResponse.action.type === "manual_intervention") {
+          detailResult.result.error = "Manual intervention required (e.g., CAPTCHA)."
         }
 
-        // Try to submit the form
-        try {
-          await page.click('input[type="submit"], button[type="submit"], button:contains("unsubscribe")')
-          await page.waitForTimeout(3000)
-          success = true
-          details = "Form submitted successfully"
-        } catch (error) {
-          details = `Form filled but submission failed: ${error.message}`
+        if (detailResult.result.success) {
+          result.success = true
+          result.summary = "Successfully processed unsubscribe link."
+        } else if (!result.success) {
+          result.summary = detailResult.result.error || "Failed to process unsubscribe link."
         }
-      } else if (analysis.action === "CAPTCHA_REQUIRED") {
-        success = false
-        details = "CAPTCHA detected - manual intervention required"
-      } else if (analysis.action === "EMAIL_CONFIRMATION") {
-        success = true
-        details = "Email confirmation required - check email for confirmation link"
+      } catch (error: any) {
+        detailResult.result.error = `Navigation error: ${error.message}`
+        result.summary = `Error processing unsubscribe link: ${error.message}`
+      } finally {
+        if (page) {
+          await page.close()
+        }
       }
-
-      return {
-        success,
-        method: analysis.action,
-        details,
-        screenshot: `data:image/png;base64,${screenshot}`,
-      }
-    } catch (error) {
-      return {
-        success: false,
-        method: "ERROR",
-        error: error.message,
-      }
-    } finally {
-      if (browser) {
-        await browser.close()
-      }
+      result.details.push(detailResult)
+      if (result.success) break // Stop if one link was successfully processed
     }
+
+    return result
   }
 
-  async unsubscribeFromEmail(emailContent: string): Promise<{
-    success: boolean
-    results: Array<{ link: UnsubscribeLink; result: UnsubscribeResult }>
-    summary: string
-  }> {
-    const links = await this.extractUnsubscribeLinks(emailContent)
+  async bulkUnsubscribe(emailsToUnsubscribe: { id: string; subject: string; sender: string; htmlContent: string }[]) {
+    await this.initializeBrowser()
+    const allResults: UnsubscribeResult[] = []
+    let successfulUnsubscribes = 0
 
-    if (links.length === 0) {
-      return {
-        success: false,
-        results: [],
-        summary: "No unsubscribe links found in email",
-      }
-    }
-
-    const results = []
-    let successCount = 0
-
-    for (const link of links) {
-      const result = await this.processUnsubscribe(link)
-      results.push({ link, result })
-
+    for (const email of emailsToUnsubscribe) {
+      const result = await this.processUnsubscribe(email.id, email.subject, email.sender, email.htmlContent)
+      allResults.push(result)
       if (result.success) {
-        successCount++
+        successfulUnsubscribes++
       }
-
-      // Add delay between requests to be respectful
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      await new Promise((resolve) => setTimeout(resolve, 3000)) // Delay to avoid rate limits
     }
 
+    await this.closeBrowser()
     return {
-      success: successCount > 0,
-      results,
-      summary: `Processed ${links.length} unsubscribe links, ${successCount} successful`,
+      results: allResults,
+      processed: emailsToUnsubscribe.length,
+      successful: successfulUnsubscribes,
     }
   }
 }

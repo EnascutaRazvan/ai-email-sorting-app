@@ -1,11 +1,17 @@
 "use client"
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { CheckCircle, XCircle, Mail, ExternalLink, ImageIcon, Eye } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { CheckCircle, XCircle, ExternalLink, Info } from "lucide-react"
+import Image from "next/image"
 
 interface UnsubscribeResult {
   emailId: string
@@ -40,128 +46,98 @@ export function UnsubscribeResultsDialog({
   totalProcessed,
   totalSuccessful,
 }: UnsubscribeResultsDialogProps) {
-  const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null)
-
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Mail className="mr-2 h-5 w-5 text-blue-600" />
-              Unsubscribe Results
-            </DialogTitle>
-            <DialogDescription>
-              Processed {totalProcessed} emails, {totalSuccessful} successful unsubscribes
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="flex-1 max-h-[60vh]">
-            <div className="space-y-4">
-              {results.map((result) => (
-                <div
-                  key={result.emailId}
-                  className={`p-4 rounded-lg border ${
-                    result.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">{result.subject}</h3>
-                      <p className="text-sm text-gray-600 truncate">From: {result.sender}</p>
-                    </div>
-                    <Badge variant={result.success ? "default" : "destructive"} className="ml-2">
-                      {result.success ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      {result.success ? "Success" : "Failed"}
-                    </Badge>
-                  </div>
-
-                  <p className="text-sm text-gray-700 mb-3">{result.summary}</p>
-
-                  {result.details.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-gray-800 uppercase tracking-wide">
-                        Unsubscribe Links Processed:
-                      </h4>
-                      {result.details.map((detail, index) => (
-                        <div key={index} className="flex items-start justify-between p-3 bg-white/50 rounded border">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <ExternalLink className="h-3 w-3 text-gray-400" />
-                              <span className="text-xs text-gray-600 truncate">{detail.link.url}</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="font-medium text-gray-700">Method:</span>
-                                <span className="ml-1 text-gray-600">{detail.result.method}</span>
-                              </div>
-
-                              {detail.result.details && (
-                                <div className="md:col-span-2">
-                                  <span className="font-medium text-gray-700">Details:</span>
-                                  <p className="text-gray-600 mt-1">{detail.result.details}</p>
-                                </div>
-                              )}
-
-                              {detail.result.error && (
-                                <div className="md:col-span-2">
-                                  <span className="font-medium text-red-700">Error:</span>
-                                  <p className="text-red-600 mt-1">{detail.result.error}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {detail.result.screenshot && (
-                              <div className="mt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setSelectedScreenshot(detail.result.screenshot!)}
-                                  className="text-xs"
-                                >
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  View Screenshot
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          <Badge variant={detail.result.success ? "default" : "secondary"} className="text-xs ml-2">
-                            {detail.result.success ? "✓" : "✗"}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">Unsubscribe Results</DialogTitle>
+          <DialogDescription>
+            Summary of the bulk unsubscribe operation.
+            <div className="mt-2 text-sm">
+              <p>
+                Processed: <span className="font-semibold">{totalProcessed}</span> emails
+              </p>
+              <p>
+                Successful: <span className="font-semibold text-green-600">{totalSuccessful}</span> emails
+              </p>
+              <p>
+                Failed: <span className="font-semibold text-red-600">{totalProcessed - totalSuccessful}</span> emails
+              </p>
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="flex-1 pr-4 -mr-4">
+          <div className="space-y-6 py-2">
+            {results.map((emailResult) => (
+              <div key={emailResult.emailId} className="border rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    {emailResult.success ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                    {emailResult.subject}
+                  </h3>
+                  <span className="text-sm text-gray-600">{emailResult.sender}</span>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+                <p className="text-sm text-gray-700 mb-3">{emailResult.summary}</p>
 
-      {/* Screenshot Modal */}
-      <Dialog open={!!selectedScreenshot} onOpenChange={() => setSelectedScreenshot(null)}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <ImageIcon className="mr-2 h-5 w-5" />
-              Unsubscribe Page Screenshot
-            </DialogTitle>
-          </DialogHeader>
-
-          {selectedScreenshot && (
-            <div className="flex justify-center">
-              <img
-                src={selectedScreenshot || "/placeholder.svg"}
-                alt="Unsubscribe page screenshot"
-                className="max-w-full max-h-[70vh] object-contain border rounded"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+                {emailResult.details.map((detail, index) => (
+                  <div key={index} className="border-t pt-3 mt-3">
+                    <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                      {detail.result.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      Attempt {index + 1}: {detail.link.text || detail.link.url}
+                      {detail.link.url && (
+                        <a
+                          href={detail.link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    {detail.result.details && (
+                      <p className="text-xs text-gray-600 mb-2 flex items-start gap-1">
+                        <Info className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                        {detail.result.details}
+                      </p>
+                    )}
+                    {detail.result.error && (
+                      <p className="text-xs text-red-500 mb-2 flex items-start gap-1">
+                        <XCircle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                        Error: {detail.result.error}
+                      </p>
+                    )}
+                    {detail.result.screenshot && (
+                      <div className="mt-2 border rounded-md overflow-hidden">
+                        <Image
+                          src={detail.result.screenshot || "/placeholder.svg"}
+                          alt="Unsubscribe page screenshot"
+                          width={800}
+                          height={450}
+                          layout="responsive"
+                          objectFit="contain"
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

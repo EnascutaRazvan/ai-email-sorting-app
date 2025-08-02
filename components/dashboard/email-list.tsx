@@ -92,7 +92,7 @@ export function EmailList({
   onEmailsUnsubscribed: (unsubscribedEmailIds: string[]) => void
 }) {
   const [emails, setEmails] = useState<Email[]>(initialEmails)
-  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
+  const [selectedEmails, setSelectedEmails] = new Set<string>()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string | "all">("all")
   const [selectedAccount, setSelectedAccount] = useState<string | "all">("all")
