@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { UnsubscribeAgent } from "@/lib/unsubscribe-agent"
 
+export const maxDuration = 60 // Allow up to 60 seconds for Vercel functions
+
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 export async function POST(request: NextRequest) {
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Fetch email content for the selected emails
     const { data: emails, error: fetchError } = await supabase
       .from("emails")
-      .select("id, email_body, snippet, sender, subject")
+      .select("id, email_body, snippet, sender, subject, ai_summary")
       .in("id", emailIds)
       .eq("user_id", session.user.id)
 
@@ -39,7 +41,20 @@ export async function POST(request: NextRequest) {
     // Process each email for unsubscribe
     for (const email of emails) {
       try {
+        // The agent needs the full body to find the link
         const emailContent = email.email_body || email.snippet || ""
+        if (!emailContent) {
+          results.push({
+            emailId: email.id,
+            subject: email.subject,
+            sender: email.sender,
+            success: false,
+            summary: "Email content is empty, cannot find unsubscribe link.",
+            details: [],
+          })
+          continue
+        }
+
         const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
 
         results.push({
@@ -62,9 +77,6 @@ export async function POST(request: NextRequest) {
             })
             .eq("id", email.id)
         }
-
-        // Add delay between processing emails
-        await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         console.error(`Error processing email ${email.id}:`, error)
         results.push({
