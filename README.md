@@ -3,7 +3,6 @@
 [![Deployed on Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple.svg?style=for-the-badge&logo=railway)](https://ai-email-sorting-app-production.up.railway.app/)
 [![Tech Stack](https://img.shields.io/badge/tech-Next.js-blue.svg?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![Database](https://img.shields.io/badge/database-Supabase-green.svg?style=for-the-badge&logo=supabase)](https://supabase.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 An intelligent AI-powered application for automatic email categorization, cleanup, and summarization. Connect multiple Gmail accounts and let the app organize your inbox with minimal effort.
 
@@ -104,12 +103,6 @@ pnpm cypress  # Run end-to-end tests
 /scripts           → Database schema setup
 /__tests__         → Unit and integration tests
 ```
-
----
-
-## 🪪 License
-
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
 
