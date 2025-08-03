@@ -154,7 +154,7 @@ export function EmailDetailDialog({ email, isOpen, onClose, onEmailUpdate, categ
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col bg-background">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col bg-background overflow-auto">
         <DialogHeader className="flex-shrink-0 border-b pb-4">
           <DialogTitle className="flex items-center text-lg text-foreground">
             <Mail className="mr-2 h-5 w-5 text-primary" />

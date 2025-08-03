@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const sender = searchParams.get("sender")
     const search = searchParams.get("search")
 
+
     let query = supabase
       .from("emails")
       .select(`
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (accountId) {
-      query = query.eq("account_id", accountId)
+      query = query.eq("user_id", accountId)
     }
 
     if (dateFrom) {
@@ -81,16 +82,16 @@ export async function GET(request: NextRequest) {
       ...email,
       category: email.categories
         ? {
-            id: email.categories.id,
-            name: email.categories.name,
-            color: email.categories.color,
-          }
+          id: email.categories.id,
+          name: email.categories.name,
+          color: email.categories.color,
+        }
         : null,
       account: email.user_accounts
         ? {
-            email: email.user_accounts.email,
-            name: email.user_accounts.name,
-          }
+          email: email.user_accounts.email,
+          name: email.user_accounts.name,
+        }
         : null,
     }))
 

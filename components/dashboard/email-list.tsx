@@ -347,7 +347,7 @@ export function EmailList({
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* Filters */}
-      <EmailFilters
+      {/* <EmailFilters
         searchQuery={searchQuery}
         onSearchChange={() => { }} // Handled by parent
         selectedCategory={selectedCategory}
@@ -364,7 +364,7 @@ export function EmailList({
         categories={categories}
         totalEmails={emails.length}
         filteredEmails={filteredEmails.length}
-      />
+      /> */}
 
       {/* Email List */}
       <Card className="glass flex-1 flex flex-col">
