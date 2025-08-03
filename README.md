@@ -1,6 +1,6 @@
 # Email Sorting App
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://v0-email-sorting-app.vercel.app/)
+[![Deployed on Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple.svg?style=for-the-badge&logo=railway)](https://ai-email-sorting-app-production.up.railway.app/)
 [![Tech Stack](https://img.shields.io/badge/tech-Next.js-blue.svg?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![Database](https://img.shields.io/badge/database-Supabase-green.svg?style=for-the-badge&logo=supabase)](https://supabase.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
@@ -19,12 +19,13 @@ An intelligent email management application that uses AI to automatically catego
 - [Environment Variables](#environment-variables)
 - [Usage](#usage)
 - [Running Tests](#running-tests)
+- [Deployment](#deployment)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Live Demo
 
-You can try out the live application here: **[https://v0-email-sorting-app.vercel.app/](https://v0-email-sorting-app.vercel.app/)**
+You can try out the live application here: **[https://ai-email-sorting-app-production.up.railway.app/](https://ai-email-sorting-app-production.up.railway.app/)**
 
 ## Features
 
@@ -47,7 +48,7 @@ You can try out the live application here: **[https://v0-email-sorting-app.verce
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
 - **Form Management**: [React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)
 - **Testing**: [Jest](https://jestjs.io/), [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), and [Cypress](https://www.cypress.io/)
-- **Deployment**: [Vercel](https://vercel.com/)
+- **Deployment**: [Railway](https://railway.app/)
 
 ## Getting Started
 
@@ -139,6 +140,32 @@ npm run test:e2e
 - **Open Cypress for interactive testing:**
 \`\`\`bash
 npm run cypress:open
+\`\`\`
+
+## Deployment
+
+### Railway (Current Deployment)
+
+The application is currently deployed on [Railway](https://railway.app/). To deploy your own instance:
+
+1. Fork this repository
+2. Sign up for a [Railway](https://railway.app/) account
+3. Create a new project and connect your GitHub repository
+4. Add all the required environment variables in the Railway dashboard
+5. Deploy automatically on push
+
+### Alternative Deployment Options
+
+#### Vercel
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy automatically on push
+
+#### Manual Deployment
+\`\`\`bash
+npm run build
+npm start
 \`\`\`
 
 ## Contributing
