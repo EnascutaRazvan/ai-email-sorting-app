@@ -53,7 +53,7 @@ interface Account {
 
 interface EmailListProps {
   selectedCategory: string | null
-  searchQuery?: string // Make it optional with default
+  searchQuery?: string
   accounts: Account[]
   categories: Category[]
   onEmailsChange: () => void
@@ -100,16 +100,15 @@ export function EmailList({
   const [totalSuccessful, setTotalSuccessful] = useState(0)
 
   // Use ref to prevent multiple simultaneous fetches
-  const fetchingRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
 
   const fetchEmails = useCallback(async () => {
-    // Prevent multiple simultaneous fetches
-    if (fetchingRef.current) {
+    // Don't fetch if component is unmounted
+    if (!mountedRef.current) {
       return
     }
 
-    fetchingRef.current = true
     setIsLoading(true)
 
     // Cancel previous request if it exists
@@ -156,6 +155,11 @@ export function EmailList({
         signal: abortControllerRef.current.signal,
       })
 
+      // Check if component is still mounted before updating state
+      if (!mountedRef.current) {
+        return
+      }
+
       if (response.ok) {
         const data = await response.json()
         setEmails(data.emails || [])
@@ -163,12 +167,16 @@ export function EmailList({
         throw new Error("Failed to fetch emails")
       }
     } catch (error) {
-      if (error instanceof Error && error.name !== "AbortError") {
+      // Only show error if it's not an abort error and component is still mounted
+      if (error instanceof Error && error.name !== "AbortError" && mountedRef.current) {
+        console.error("Error fetching emails:", error)
         showErrorToast(error, "Fetching Emails")
       }
     } finally {
-      setIsLoading(false)
-      fetchingRef.current = false
+      // Only update loading state if component is still mounted
+      if (mountedRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder])
 
@@ -179,7 +187,9 @@ export function EmailList({
 
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true
     return () => {
+      mountedRef.current = false
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -483,7 +493,7 @@ export function EmailList({
                 <Mail className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No emails found</h3>
                 <p className="text-muted-foreground">
-                  {searchQuery || selectedCategory || selectedAccount || dateRange !== "all"
+                  {searchQuery || selectedCategory !== "all" || selectedAccount || dateRange !== "all"
                     ? "Try adjusting your filters or search terms"
                     : "Connect your Gmail account to start importing emails"}
                 </p>
