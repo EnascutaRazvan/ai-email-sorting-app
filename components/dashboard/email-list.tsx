@@ -180,11 +180,13 @@ export function EmailList({
     }
   }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder])
 
-  // Fetch emails when dependencies change
   useEffect(() => {
-    fetchEmails()
-  }, [fetchEmails])
+    const timeout = setTimeout(() => {
+      fetchEmails()
+    }, 100)
 
+    return () => clearTimeout(timeout)
+  }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder])
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true
@@ -411,9 +413,9 @@ export function EmailList({
       {/* Filters */}
       <EmailFilters
         searchQuery={searchQuery}
-        onSearchChange={() => {}} // Handled by parent
+        onSearchChange={() => { }} // Handled by parent
         selectedCategory={selectedCategory}
-        onCategoryChange={() => {}} // Handled by parent
+        onCategoryChange={() => { }} // Handled by parent
         sortBy={sortBy}
         onSortChange={setSortBy}
         sortOrder={sortOrder}
