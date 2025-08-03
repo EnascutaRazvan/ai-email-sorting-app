@@ -1,0 +1,41 @@
+{
+    "success": true,
+    "emails": [
+        {
+            "id": "email-1",
+            "subject": "Weekly Team Update",
+            "sender": "manager@company.com",
+            "snippet": "Here's this week's team update with important announcements...",
+            "ai_summary": "Weekly team meeting summary with project updates and deadlines",
+            "received_at": "2024-01-15T10:30:00Z",
+            "is_read": false,
+            "category": {
+                "id": "1",
+                "name": "Primary",
+                "color": "#3B82F6"
+            },
+            "account": {
+                "email": "user@example.com",
+                "name": "John Doe"
+            }
+        },
+        {
+            "id": "email-2",
+            "subject": "50% off sale!",
+            "sender": "store@example.com",
+            "snippet": "Get 50% off this week only...",
+            "ai_summary": "Promotional offer for weekly sale.",
+            "received_at": "2024-01-17T11:00:00Z",
+            "is_read": false,
+            "category": {
+                "id": "2",
+                "name": "Promotions",
+                "color": "#10B981"
+            },
+            "account": {
+                "email": "user@example.com",
+                "name": "John Doe"
+            }
+        }
+    ]
+}

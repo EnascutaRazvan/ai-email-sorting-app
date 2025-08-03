@@ -1,28 +1,25 @@
 {
   "categories": [
     {
-      "id": "cat-1",
-      "name": "Work",
-      "description": "Work-related emails",
+      "id": "1",
+      "name": "Primary",
+      "description": "",
       "color": "#3B82F6",
-      "email_count": 15,
-      "created_at": "2024-01-01T00:00:00Z"
+      "email_count": 10
     },
     {
-      "id": "cat-2",
-      "name": "Personal",
-      "description": "Personal emails",
-      "color": "#10B981",
-      "email_count": 8,
-      "created_at": "2024-01-01T00:00:00Z"
-    },
-    {
-      "id": "cat-3",
-      "name": "Newsletters",
-      "description": "Newsletter subscriptions",
+      "id": "2",
+      "name": "Promotions",
+      "description": "",
       "color": "#F59E0B",
-      "email_count": 23,
-      "created_at": "2024-01-01T00:00:00Z"
+      "email_count": 5
+    },
+    {
+      "id": "3",
+      "name": "Social",
+      "description": "",
+      "color": "#EF4444",
+      "email_count": 2
     }
   ]
 }

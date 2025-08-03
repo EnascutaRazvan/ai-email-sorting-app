@@ -169,6 +169,7 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
               Import emails from all connected accounts simultaneously
             </p>
             <Button
+              data-testid="import-emails-btn"
               onClick={handleImportAll}
               disabled={importingAccounts.size > 0}
               className="w-full bg-green-600 hover:bg-green-700"

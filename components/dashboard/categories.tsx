@@ -193,7 +193,7 @@ export function Categories({ selectedCategory, onCategorySelect, onCategoriesCha
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-background hover:bg-muted" size="sm">
+            <Button data-testid="add-category-button" variant="outline" className="w-full bg-background hover:bg-muted" size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Category
             </Button>

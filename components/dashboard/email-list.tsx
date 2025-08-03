@@ -424,7 +424,7 @@ export function EmailList({
           )}
         </CardHeader>
 
-        <CardContent className="flex-1 p-0">
+        <CardContent className="flex-1 p-0" data-testid="email-list">
           {filteredEmails.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">

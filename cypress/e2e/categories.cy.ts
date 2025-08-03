@@ -1,36 +1,52 @@
-/// <reference types="cypress" />
+// cypress/e2e/categories.cy.ts
+const emailsFixture = require('../fixtures/emails.json');
 
-describe("Categories component", () => {
-  beforeEach(() => {
-    // Mock valid session to bypass login check
-    cy.intercept("GET", "/api/auth/session", {
-      statusCode: 200,
-      body: {
-        user: { id: "test-user-id", name: "Test User", email: "test@example.com" },
-        expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      },
-    })
+describe('Inbox Categories', () => {
+    beforeEach(() => {
+        cy.signIn();
+        cy.visit('/dashboard');
+        cy.wait('@getCategories');
 
-    // Intercept GET for categories with mock fixture
-    cy.intercept("GET", "/api/categories", {
-      statusCode: 200,
-      body: {
-        categories: [
-          { id: "1", name: "Work", description: "Work emails", color: "#3B82F6", email_count: 5 },
-          { id: "2", name: "Personal", description: "Personal emails", color: "#EF4444", email_count: 3 },
-        ],
-      },
-    }).as("getCategories")
+        cy.intercept('GET', '/api/emails*', (req) => {
+            const url = new URL(req.url, 'http://localhost:3000');
+            const categoryId = url.searchParams.get('category');
+            let emails = emailsFixture.emails;
+            if (categoryId && categoryId !== 'all') {
+                emails = emails.filter(
+                    (email) => email.category && email.category.id === categoryId
+                );
+            }
+            req.reply({
+                statusCode: 200,
+                body: { success: true, emails },
+            });
+        }).as('getEmails');
+    });
 
-    // Visit page/component showing categories list
-    cy.visit("/dashboard") // adjust route as per your setup
-  })
+    it('shows all categories in sidebar', () => {
+        cy.fixture('categories.json').then((data) => {
+            data.categories.forEach((cat: any) => {
+                cy.contains(cat.name, { timeout: 8000 }).should('be.visible');
+            });
+        });
+    });
 
-  it("displays categories after loading", () => {
-    cy.wait("@getCategories")
+    it('shows emails when a category is clicked', () => {
+        cy.contains('Promotions', { timeout: 8000 }).should('be.visible');
+        cy.selectCategory('2'); // "2" = Promotions category id in the fixture
+        cy.wait('@getEmails');
+        cy.get('[data-testid="email-list"]').should('exist');
 
-    cy.contains("Categories")
-    cy.get("button").contains("Work").should("exist")
-    cy.get("button").contains("Personal").should("exist")
-  })
-})
+        // Only Promotion emails are displayed
+        const promotionEmails = emailsFixture.emails.filter(
+            (e: any) => e.category && e.category.id === '2'
+        );
+        promotionEmails.forEach((email: any) => {
+            cy.contains(email.subject).should('be.visible');
+        });
+    });
+
+    it('highlights the active category', () => {
+        cy.contains('Promotions', { timeout: 8000 }).should('be.visible');
+    });
+});

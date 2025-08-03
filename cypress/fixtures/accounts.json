@@ -7,10 +7,23 @@
       "picture": "https://example.com/avatar.jpg",
       "is_primary": true,
       "token_status": "valid",
-      "permissions": ["Gmail Read Access", "Gmail Modify Access"],
+      "permissions": [
+        "Gmail Read Access",
+        "Gmail Modify Access"
+      ],
       "last_sync": "2024-01-15T08:00:00Z"
+    },
+    {
+      "id": "account-2",
+      "email": "jane@work.com",
+      "name": "Jane Smith",
+      "picture": "",
+      "is_primary": false,
+      "token_status": "valid",
+      "permissions": [],
+      "last_sync": "2024-01-14T12:00:00Z"
     }
   ],
-  "total": 1,
+  "total": 2,
   "primary": "user@example.com"
 }

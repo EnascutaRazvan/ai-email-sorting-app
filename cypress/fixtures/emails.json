@@ -10,8 +10,8 @@
       "received_at": "2024-01-15T10:30:00Z",
       "is_read": false,
       "category": {
-        "id": "cat-1",
-        "name": "Work",
+        "id": "1",
+        "name": "Primary",
         "color": "#3B82F6"
       },
       "account": {
@@ -21,6 +21,42 @@
     },
     {
       "id": "email-2",
+      "subject": "50% off sale!",
+      "sender": "store@example.com",
+      "snippet": "Get 50% off this week only...",
+      "ai_summary": "Promotional offer for weekly sale.",
+      "received_at": "2024-01-17T11:00:00Z",
+      "is_read": false,
+      "category": {
+        "id": "2",
+        "name": "Promotions",
+        "color": "#10B981"
+      },
+      "account": {
+        "email": "user@example.com",
+        "name": "John Doe"
+      }
+    },
+    {
+      "id": "email-3",
+      "subject": "Last chance for exclusive deals!",
+      "sender": "promo@example.com",
+      "snippet": "Don't miss out on our limited-time deals.",
+      "ai_summary": "Reminder for exclusive promotional deals.",
+      "received_at": "2024-01-16T14:22:00Z",
+      "is_read": true,
+      "category": {
+        "id": "2",
+        "name": "Promotions",
+        "color": "#10B981"
+      },
+      "account": {
+        "email": "user@example.com",
+        "name": "John Doe"
+      }
+    },
+    {
+      "id": "email-4",
       "subject": "Your Monthly Newsletter",
       "sender": "newsletter@techblog.com",
       "snippet": "This month's top articles and tech trends...",
@@ -28,8 +64,8 @@
       "received_at": "2024-01-15T09:15:00Z",
       "is_read": true,
       "category": {
-        "id": "cat-3",
-        "name": "Newsletters",
+        "id": "3",
+        "name": "Social",
         "color": "#F59E0B"
       },
       "account": {
