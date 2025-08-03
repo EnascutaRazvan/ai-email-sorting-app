@@ -1,156 +1,241 @@
-# Email Sorting App
+# 📧 AI Email Sorting App
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://v0-email-sorting-app.vercel.app/)
-[![Tech Stack](https://img.shields.io/badge/tech-Next.js-blue.svg?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![Database](https://img.shields.io/badge/database-Supabase-green.svg?style=for-the-badge&logo=supabase)](https://supabase.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+An intelligent email management application that automatically categorizes and organizes your emails using AI-powered classification. Connect multiple email accounts, create custom categories, and let AI do the heavy lifting of sorting your inbox.
 
-An intelligent email management application that uses AI to automatically categorize, summarize, and clean up your inbox. Connect multiple Gmail accounts and let the AI do the heavy lifting.
+## ✨ Features
 
-## Table of Contents
+### 🤖 AI-Powered Email Classification
+- Automatically categorize emails using advanced AI algorithms
+- Smart learning from your manual categorizations
+- Bulk recategorization of existing emails
 
-- [Live Demo](#live-demo)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Database Setup](#database-setup)
-- [Environment Variables](#environment-variables)
-- [Usage](#usage)
-- [Running Tests](#running-tests)
-- [Contributing](#contributing)
-- [License](#license)
+### 📬 Multi-Account Support
+- Connect multiple Gmail accounts
+- Unified dashboard for all your email accounts
+- Individual account management and sync controls
 
-## Live Demo
+### 🏷️ Custom Categories
+- Create unlimited custom categories
+- Color-coded organization system
+- Automatic "Uncategorized" fallback for new emails
 
-You can try out the live application here: **[https://v0-email-sorting-app.vercel.app/](https://v0-email-sorting-app.vercel.app/)**
+### 🔄 Real-time Synchronization
+- Automatic email syncing via cron jobs
+- Manual sync options for immediate updates
+- Import emails from specific date ranges
 
-## Features
+### 🗑️ Bulk Operations
+- Mass delete emails by category or selection
+- Bulk unsubscribe from unwanted senders
+- Batch operations with progress tracking
 
-- **Secure Google Authentication**: Sign in safely using your Google account via NextAuth.js.
-- **Multi-Account Connectivity**: Connect and manage multiple Gmail accounts in one place.
-- **AI-Powered Categorization**: Automatically sorts incoming emails into smart, user-defined categories.
-- **Smart Summaries**: Get quick, AI-generated summaries of long emails without opening them.
-- **Bulk Email Management**: Perform actions like delete, recategorize, and unsubscribe on multiple emails at once.
-- **One-Click Unsubscribe**: Easily unsubscribe from newsletters and promotional emails.
-- **Customizable Categories**: Create, edit, and delete your own categories with custom colors.
-- **Responsive Design**: A clean, modern, and fully responsive UI built with shadcn/ui and Tailwind CSS.
+### 🔍 Advanced Filtering & Search
+- Filter by categories, accounts, and date ranges
+- Search through email content and metadata
+- Sort by various criteria (date, sender, subject)
 
-## Tech Stack
+### 🌙 Modern UI/UX
+- Dark/light theme support
+- Responsive design for all devices
+- Intuitive dashboard with real-time updates
 
-- **Framework**: [Next.js](https://nextjs.org/) 14 (App Router)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database**: [Supabase](https://supabase.io/) (PostgreSQL)
-- **Authentication**: [NextAuth.js](https://next-auth.js.org/) (Google Provider)
-- **AI**: [Vercel AI SDK](https://sdk.vercel.ai/) with [Groq](https://groq.com/) for fast inference.
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
-- **Form Management**: [React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)
-- **Testing**: [Jest](https://jestjs.io/), [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), and [Cypress](https://www.cypress.io/)
-- **Deployment**: [Vercel](https://vercel.com/)
-
-## Getting Started
-
-Follow these instructions to set up the project locally.
+## 🚀 Getting Started
 
 ### Prerequisites
-
-- [Node.js](https://nodejs.org/en/) (v18 or later)
-- [npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/), or [pnpm](https://pnpm.io/)
-- A [Supabase](https://supabase.com/) account for the database.
-- A [Google Cloud Platform](https://console.cloud.google.com/) project with OAuth 2.0 credentials.
-- A [Groq](https://console.groq.com/keys) API key.
+- Node.js 18+ 
+- A Supabase account
+- Google Cloud Console project with Gmail API enabled
 
 ### Installation
 
-1.  **Clone the repository:**
-  \`\`\`bash
-  git clone https://github.com/your-username/ai-email-sorting-app.git
-  cd ai-email-sorting-app
-  \`\`\`
+1. **Clone the repository**
+   \`\`\`bash
+   git clone https://github.com/your-username/ai-email-sorting-app.git
+   cd ai-email-sorting-app
+   \`\`\`
 
-2.  **Install dependencies:**
-  \`\`\`bash
-  npm install
-  # or
-  yarn install
-  # or
-  pnpm install
-  \`\`\`
+2. **Install dependencies**
+   \`\`\`bash
+   npm install
+   \`\`\`
 
-### Database Setup
+3. **Set up environment variables**
+   Create a `.env.local` file in the root directory:
+   \`\`\`env
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-1.  Go to [Supabase](https://app.supabase.com/) and create a new project.
-2.  Navigate to the **SQL Editor** in your Supabase project.
-3.  Copy the entire content of `scripts/database-schema.sql` and run it to create the necessary tables and policies.
+   # Google OAuth Configuration
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
 
-### Environment Variables
+   # NextAuth Configuration
+   NEXTAUTH_SECRET=your_nextauth_secret
+   NEXTAUTH_URL=http://localhost:3000
+   \`\`\`
 
-Create a `.env.local` file in the root of your project and add the following variables.
+4. **Set up the database**
+   Run the SQL scripts in the `scripts/` directory in your Supabase SQL editor:
+   \`\`\`bash
+   # Run these in order:
+   # 1. scripts/database-schema.sql
+   # 2. scripts/enhanced-accounts-schema.sql
+   \`\`\`
 
-\`\`\`sh
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+5. **Configure Google OAuth**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Enable Gmail API
+   - Create OAuth 2.0 credentials
+   - Add authorized redirect URIs:
+     - `http://localhost:3000/api/auth/callback/google` (development)
+     - `https://yourdomain.com/api/auth/callback/google` (production)
 
-# Google OAuth Credentials
-# See: https://next-auth.js.org/providers/google
-GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+6. **Run the development server**
+   \`\`\`bash
+   npm run dev
+   \`\`\`
 
-# NextAuth
-# Generate a secret with `openssl rand -base64 32`
-NEXTAUTH_SECRET=YOUR_NEXTAUTH_SECRET
-NEXTAUTH_URL=http://localhost:3000
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-# AI Provider (Groq)
-GROQ_API_KEY=YOUR_GROQ_API_KEY
+## 🏗️ Project Structure
+
+\`\`\`
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   ├── auth/              # Authentication pages
+│   ├── dashboard/         # Dashboard pages
+│   └── layout.tsx         # Root layout
+├── components/            # React components
+│   ├── dashboard/         # Dashboard-specific components
+│   └── ui/               # Reusable UI components
+├── hooks/                # Custom React hooks
+├── lib/                  # Utility functions
+├── scripts/              # Database scripts
+├── types/                # TypeScript type definitions
+└── cypress/              # E2E tests
 \`\`\`
 
-- You can get your Supabase keys from your project's **Settings > API** page.
-- You can get your Google credentials from the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-- You can get your Groq API key from the [Groq Console](https://console.groq.com/keys).
+## 🔧 Configuration
 
-## Usage
+### Database Schema
+The app uses Supabase with the following main tables:
+- `users` - User authentication and profiles
+- `user_accounts` - Connected email accounts
+- `categories` - Email categories
+- `emails` - Email metadata and content
+- `email_processing_jobs` - Background job tracking
+- `unsubscribe_jobs` - Unsubscribe operation tracking
 
-Once the setup is complete, run the development server:
+### API Endpoints
+- `/api/auth/*` - Authentication (NextAuth.js)
+- `/api/accounts` - Email account management
+- `/api/categories` - Category CRUD operations
+- `/api/emails` - Email operations and AI processing
+- `/api/cron/sync-emails` - Automated email synchronization
 
+## 🧪 Testing
+
+### Unit Tests
 \`\`\`bash
-npm run dev
+npm run test
 \`\`\`
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
-
-## Running Tests
-
-This project uses Jest for unit tests and Cypress for end-to-end tests.
-
-- **Run Jest unit tests:**
-\`\`\`bash
-npm test
-\`\`\`
-
-- **Run Cypress E2E tests:**
-\`\`\`bash
-npm run test:e2e
-\`\`\`
-
-- **Open Cypress for interactive testing:**
+### E2E Tests
 \`\`\`bash
 npm run cypress:open
 \`\`\`
 
-## Contributing
+### Test Coverage
+\`\`\`bash
+npm run test:coverage
+\`\`\`
 
-Contributions are welcome! If you have suggestions for improving the app, please feel free to create an issue or submit a pull request.
+## 🚀 Deployment
 
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+### Vercel (Recommended)
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard
+4. Deploy automatically on push
 
-## License
+### Manual Deployment
+\`\`\`bash
+npm run build
+npm start
+\`\`\`
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+## 🔒 Security Features
+
+- **Row Level Security (RLS)** - Database-level access control
+- **OAuth 2.0** - Secure Google account integration
+- **JWT Tokens** - Secure session management
+- **API Rate Limiting** - Protection against abuse
+- **Input Validation** - Comprehensive data sanitization
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow TypeScript best practices
+- Write tests for new features
+- Use conventional commit messages
+- Ensure responsive design
+- Test across different browsers
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Next.js](https://nextjs.org/) - React framework
+- [Supabase](https://supabase.com/) - Backend as a Service
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [Radix UI](https://www.radix-ui.com/) - Unstyled, accessible components
+- [NextAuth.js](https://next-auth.js.org/) - Authentication library
+- [Lucide React](https://lucide.dev/) - Beautiful icons
+
+## 📞 Support
+
+If you encounter any issues or have questions:
+
+1. Check the [Issues](https://github.com/your-username/ai-email-sorting-app/issues) page
+2. Create a new issue with detailed information
+3. Join our [Discord community](https://discord.gg/your-invite) for real-time help
+
+## 🗺️ Roadmap
+
+- [ ] **Advanced AI Features**
+  - Smart reply suggestions
+  - Email priority scoring
+  - Sentiment analysis
+
+- [ ] **Enhanced Integrations**
+  - Outlook/Exchange support
+  - Slack notifications
+  - Calendar integration
+
+- [ ] **Mobile App**
+  - React Native mobile application
+  - Push notifications
+  - Offline support
+
+- [ ] **Analytics Dashboard**
+  - Email volume analytics
+  - Category distribution charts
+  - Productivity insights
+
+---
+
+**Built with ❤️ using [v0.dev](https://v0.dev)**
+
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/renascuta-7771s-projects/v0-email-sorting-app)
+[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/t7jpRYEDFBN)
