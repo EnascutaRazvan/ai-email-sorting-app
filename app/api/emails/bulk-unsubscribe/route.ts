@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       try {
         const emailContent = email.email_body || email.snippet || ""
 
-        const agentResponse = await fetch(`${process.env.unsubscribe_agent}`, {
+        const agentResponse = await fetch(`${process.env.unsubscribe_agent}/unsubscribe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ emailContent }),
@@ -64,12 +64,12 @@ export async function POST(request: NextRequest) {
         if (unsubscribeResult.success) {
           successfulUnsubscribes++
 
-          await supabase
-            .from("emails")
-            .update({
-              ai_summary: `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim(),
-            })
-            .eq("id", email.id)
+          // await supabase
+          //   .from("emails")
+          //   .update({
+          //     ai_summary: `${email.ai_summary || ""}\n\n[UNSUBSCRIBED: ${unsubscribeResult.summary}]`.trim(),
+          //   })
+          //   .eq("id", email.id)
         }
 
         await new Promise((resolve) => setTimeout(resolve, 2000))
