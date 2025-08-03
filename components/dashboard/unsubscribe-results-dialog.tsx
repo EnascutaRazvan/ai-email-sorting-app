@@ -72,10 +72,6 @@ export function UnsubscribeResultsDialog({
     })
   }
 
-  const getSuccessRate = () => {
-    return totalProcessed > 0 ? Math.round((totalSuccessful / totalProcessed) * 100) : 0
-  }
-
   const getStepIcon = (step: string) => {
     if (step.toLowerCase().includes("analyzing") || step.toLowerCase().includes("scanning")) {
       return <Search className="h-3 w-3 text-blue-500" />
@@ -93,28 +89,15 @@ export function UnsubscribeResultsDialog({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col overflow-auto overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center">
               <Mail className="mr-2 h-5 w-5 text-blue-600" />
               Unsubscribe Results
             </DialogTitle>
-            <DialogDescription>
-              <div className="flex items-center justify-between">
-                <span>
-                  Processed {totalProcessed} emails, {totalSuccessful} successful unsubscribes
-                </span>
-                <Badge
-                  variant={getSuccessRate() >= 70 ? "default" : getSuccessRate() >= 40 ? "secondary" : "destructive"}
-                  className="ml-2"
-                >
-                  {getSuccessRate()}% Success Rate
-                </Badge>
-              </div>
-            </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 max-h-[60vh]">
+          <ScrollArea className="flex-1 max-h-[60vh] overflow-auto overflow-y-auto">
             <div className="space-y-4">
               {results.map((result) => {
                 const isExpanded = expandedResults.has(result.emailId)
@@ -123,7 +106,7 @@ export function UnsubscribeResultsDialog({
                   <div
                     key={result.emailId}
                     className={cn(
-                      "rounded-lg border transition-all duration-200",
+                      "rounded-lg border transition-all duration-200 overflow-auto overflow-y-auto",
                       result.success
                         ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
                         : "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800",
@@ -131,7 +114,7 @@ export function UnsubscribeResultsDialog({
                   >
                     <div className="p-4">
                       <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 overflow-auto overflow-y-auto">
                           <div className="flex items-center space-x-2 mb-1">
                             {result.success ? (
                               <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
@@ -162,11 +145,11 @@ export function UnsubscribeResultsDialog({
                       </div>
 
                       {isExpanded && result.details.length > 0 && (
-                        <div className="space-y-4 pt-4 border-t border-border">
+                        <div className="space-y-4 pt-4 border-t border-border overflow-auto overflow-y-auto max-h-[50vh]">
                           {result.details.map((detail, index) => (
-                            <div key={index} className="bg-background/50 rounded-lg p-4">
+                            <div key={index} className="bg-background/50 rounded-lg p-4 overflow-auto overflow-y-auto">
                               <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 overflow-auto overflow-y-auto">
                                   <div className="flex items-center space-x-2 mb-2">
                                     <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                                     <span className="text-xs font-mono text-muted-foreground truncate">
@@ -196,7 +179,7 @@ export function UnsubscribeResultsDialog({
 
                               {/* AI Analysis */}
                               {detail.result.aiAnalysis && (
-                                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg overflow-auto overflow-y-auto">
                                   <div className="flex items-center mb-2">
                                     <Info className="h-4 w-4 text-blue-600 mr-2" />
                                     <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -209,12 +192,12 @@ export function UnsubscribeResultsDialog({
 
                               {/* AI Steps */}
                               {detail.result.aiSteps && detail.result.aiSteps.length > 0 && (
-                                <div className="mb-4">
+                                <div className="mb-4 overflow-auto overflow-y-auto">
                                   <div className="flex items-center mb-3">
                                     <Zap className="h-4 w-4 text-primary mr-2" />
                                     <span className="text-sm font-medium text-foreground">AI Processing Steps</span>
                                   </div>
-                                  <div className="space-y-2">
+                                  <div className="space-y-2 max-h-32 overflow-auto overflow-y-auto">
                                     {detail.result.aiSteps.map((step, stepIndex) => (
                                       <div key={stepIndex} className="flex items-start space-x-3 text-sm">
                                         <div className="flex-shrink-0 mt-0.5">{getStepIcon(step)}</div>
@@ -230,7 +213,7 @@ export function UnsubscribeResultsDialog({
 
                               {/* Success Details */}
                               {detail.result.success && detail.result.details && (
-                                <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                                <div className="mb-4 p-3 bg-green-50 dark:bg-green-950 rounded-lg overflow-auto overflow-y-auto">
                                   <div className="flex items-center mb-2">
                                     <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
                                     <span className="text-sm font-medium text-green-900 dark:text-green-100">
@@ -243,7 +226,7 @@ export function UnsubscribeResultsDialog({
 
                               {/* Error Details */}
                               {!detail.result.success && detail.result.error && (
-                                <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg">
+                                <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 rounded-lg overflow-auto overflow-y-auto">
                                   <div className="flex items-center mb-2">
                                     <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
                                     <span className="text-sm font-medium text-red-900 dark:text-red-100">
@@ -285,7 +268,7 @@ export function UnsubscribeResultsDialog({
           </ScrollArea>
 
           {/* Summary Footer */}
-          <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-4 overflow-auto overflow-y-auto">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-foreground">{totalProcessed}</div>
@@ -296,7 +279,9 @@ export function UnsubscribeResultsDialog({
                 <div className="text-sm text-muted-foreground">Successful</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-red-600">{totalProcessed - totalSuccessful}</div>
+                <div className="text-2xl font-bold text-red-600">
+                  {totalProcessed - totalSuccessful}
+                </div>
                 <div className="text-sm text-muted-foreground">Failed</div>
               </div>
             </div>
@@ -306,7 +291,7 @@ export function UnsubscribeResultsDialog({
 
       {/* Screenshot Modal */}
       <Dialog open={!!selectedScreenshot} onOpenChange={() => setSelectedScreenshot(null)}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col overflow-auto overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center">
               <ImageIcon className="mr-2 h-5 w-5" />
@@ -315,13 +300,15 @@ export function UnsubscribeResultsDialog({
           </DialogHeader>
 
           {selectedScreenshot && (
-            <div className="flex justify-center">
-              <img
-                src={selectedScreenshot || "/placeholder.svg"}
-                alt="Unsubscribe page screenshot"
-                className="max-w-full max-h-[70vh] object-contain border rounded"
-              />
-            </div>
+            <ScrollArea className="flex-1 max-h-[70vh] overflow-auto overflow-y-auto">
+              <div className="flex justify-center p-4">
+                <img
+                  src={selectedScreenshot}
+                  alt="Unsubscribe page screenshot"
+                  className="max-w-full max-h-full object-contain border rounded"
+                />
+              </div>
+            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>

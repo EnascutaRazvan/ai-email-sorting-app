@@ -23,9 +23,6 @@ export async function POST(request: NextRequest) {
     // Get user categories
     const { data: categories } = await supabase.from("categories").select("*").eq("user_id", session.user.id)
 
-    const uncategorizedCategory = categories?.find((c) => c.name.toLowerCase() === "uncategorized")
-
-
     if (!categories || categories.length === 0) {
       return NextResponse.json({ error: "No categories found" }, { status: 400 })
     }
