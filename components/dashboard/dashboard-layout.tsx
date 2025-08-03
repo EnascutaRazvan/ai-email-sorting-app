@@ -90,6 +90,13 @@ export function DashboardLayout() {
     }
   }, [session?.user?.id])
 
+  // Function to trigger email list refresh
+  const triggerEmailRefresh = useCallback(() => {
+    setRefreshTrigger((prev) => prev + 1)
+    // Also dispatch event for EmailList component
+    window.dispatchEvent(new CustomEvent("emailsChanged"))
+  }, [])
+
   // Initial data fetch
   useEffect(() => {
     if (session?.user?.id) {
@@ -200,7 +207,7 @@ export function DashboardLayout() {
       await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
 
       // Fetch uncategorized email IDs
-      const res = await fetch("/api/emails?category=uncategorized") // Or whatever your uncategorized query is
+      const res = await fetch("/api/emails?category=uncategorized")
       const data = await res.json()
 
       if (!res.ok || !Array.isArray(data.emails)) {
@@ -223,7 +230,10 @@ export function DashboardLayout() {
       if (response.ok) {
         const result = await response.json()
         showSuccessToast("AI Recategorization Complete", `Updated ${result.updated} emails with AI suggestions`)
-        setRefreshTrigger((prev) => prev + 1)
+
+        // Refresh categories and emails after recategorization
+        await fetchCategories()
+        triggerEmailRefresh()
       } else {
         throw new Error("Failed to recategorize emails")
       }
@@ -236,6 +246,14 @@ export function DashboardLayout() {
 
   const handleInitialCategoriesCreated = () => {
     setRefreshTrigger((prev) => prev + 1)
+  }
+
+  const handleImportComplete = async () => {
+    // Refresh categories and accounts after import
+    await fetchCategories()
+    await fetchAccounts()
+    // Trigger email list refresh
+    triggerEmailRefresh()
   }
 
   const getTotalEmailCount = () => {
@@ -456,13 +474,8 @@ export function DashboardLayout() {
 
           {/* Actions */}
           <div className="space-y-2">
-            <MultiAccountDialog
-              onAccountConnected={() => setRefreshTrigger((prev) => prev + 1)}
-              existingAccounts={accounts.length}
-            />
-            {accounts.length > 0 && (
-              <EmailImportButton accounts={accounts} onImportComplete={() => setRefreshTrigger((prev) => prev + 1)} />
-            )}
+            <MultiAccountDialog onAccountConnected={handleImportComplete} existingAccounts={accounts.length} />
+            {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={handleImportComplete} />}
           </div>
         </div>
       </ScrollArea>
@@ -523,7 +536,7 @@ export function DashboardLayout() {
               searchQuery={debouncedSearchQuery}
               accounts={accounts}
               categories={categories}
-              onEmailsChange={() => setRefreshTrigger((prev) => prev + 1)}
+              onEmailsChange={triggerEmailRefresh}
             />
           </div>
         </div>

@@ -52,7 +52,10 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
           "Emails Imported Successfully",
           `Imported ${data.imported} new emails from ${accountEmail}. ${data.processed - data.imported} emails were already imported.`,
         )
+
+        // Call the parent's import complete handler
         onImportComplete()
+
         // Dispatch event for other components
         window.dispatchEvent(new CustomEvent("emailsChanged"))
       } else {
@@ -71,9 +74,16 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
   }
 
   const handleImportAll = async () => {
-    const importPromises = accounts.map((account) => handleImportEmails(account.id, account.email))
-    await Promise.all(importPromises)
+    // Import from all accounts sequentially to avoid overwhelming the API
+    for (const account of accounts) {
+      await handleImportEmails(account.id, account.email)
+    }
+
+    // Close dialog after all imports are complete
     setIsOpen(false)
+
+    // Final refresh after all imports
+    onImportComplete()
   }
 
   const getLastSyncInfo = (account: ConnectedAccount) => {
@@ -167,7 +177,7 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
               {importingAccounts.size > 0 ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Importing...
+                  Importing from {importingAccounts.size} account{importingAccounts.size > 1 ? "s" : ""}...
                 </>
               ) : (
                 <>
@@ -223,7 +233,7 @@ export function EmailImportButton({ accounts, onImportComplete }: EmailImportBut
 
                   <Button
                     onClick={() => handleImportEmails(account.id, account.email)}
-                    disabled={isImporting}
+                    disabled={isImporting || importingAccounts.size > 0}
                     variant="outline"
                     size="sm"
                     className="ml-2"
