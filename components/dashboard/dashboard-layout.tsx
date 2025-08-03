@@ -163,6 +163,8 @@ export function DashboardLayout() {
         if (selectedCategory === categoryId) {
           setSelectedCategory("all")
         }
+
+        await handleRecategorizeEmails();
       } else {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to delete category")
@@ -204,17 +206,17 @@ export function DashboardLayout() {
 
     try {
       // Ensure uncategorized exists
-      await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
+      // await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
 
       // Fetch uncategorized email IDs
-      const res = await fetch("/api/emails?category=uncategorized")
+      const res = await fetch("/api/emails")
       const data = await res.json()
 
       if (!res.ok || !Array.isArray(data.emails)) {
         throw new Error("Could not fetch uncategorized emails")
       }
 
-      const emailIds = data.emails.map((email) => email.id)
+      const emailIds = data.emails.map((email: any) => email.id)
 
       if (emailIds.length === 0) {
         showSuccessToast("No uncategorized emails", "Nothing to recategorize")
