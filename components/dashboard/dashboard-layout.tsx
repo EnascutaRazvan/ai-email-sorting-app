@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { MultiAccountDialog } from "./multi-account-dialog"
 import { EmailImportButton } from "./email-import-button"
 import { CreateCategoryDialog } from "./create-category-dialog"
+import { InitialCategoriesDialog } from "./initial-categories-dialog"
 import { cn } from "@/lib/utils"
 import { useDebounce } from "@/hooks/use-debounce"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
@@ -45,6 +46,8 @@ export function DashboardLayout() {
   const [searchQuery, setSearchQuery] = useState("")
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isRecategorizing, setIsRecategorizing] = useState(false)
+  const [showInitialCategoriesDialog, setShowInitialCategoriesDialog] = useState(false)
+  const [hasCheckedInitialCategories, setHasCheckedInitialCategories] = useState(false)
 
   // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
@@ -57,12 +60,19 @@ export function DashboardLayout() {
       const response = await fetch("/api/categories")
       if (response.ok) {
         const data = await response.json()
-        setCategories(data.categories || [])
+        const fetchedCategories = data.categories || []
+        setCategories(fetchedCategories)
+
+        // Check if we should show initial categories dialog
+        if (!hasCheckedInitialCategories && fetchedCategories.length === 0) {
+          setShowInitialCategoriesDialog(true)
+          setHasCheckedInitialCategories(true)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch categories:", error)
     }
-  }, [session?.user?.id])
+  }, [session?.user?.id, hasCheckedInitialCategories])
 
   const fetchAccounts = useCallback(async () => {
     if (!session?.user?.id) return
@@ -79,6 +89,13 @@ export function DashboardLayout() {
       setIsLoading(false)
     }
   }, [session?.user?.id])
+
+  // Function to trigger email list refresh
+  const triggerEmailRefresh = useCallback(() => {
+    setRefreshTrigger((prev) => prev + 1)
+    // Also dispatch event for EmailList component
+    window.dispatchEvent(new CustomEvent("emailsChanged"))
+  }, [])
 
   // Initial data fetch
   useEffect(() => {
@@ -146,6 +163,8 @@ export function DashboardLayout() {
         if (selectedCategory === categoryId) {
           setSelectedCategory("all")
         }
+
+        await handleRecategorizeEmails();
       } else {
         const errorData = await response.json()
         throw new Error(errorData.error || "Failed to delete category")
@@ -187,17 +206,17 @@ export function DashboardLayout() {
 
     try {
       // Ensure uncategorized exists
-      await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
+      // await fetch("/api/categories/ensure-uncategorized", { method: "POST" })
 
       // Fetch uncategorized email IDs
-      const res = await fetch("/api/emails?category=uncategorized") // Or whatever your uncategorized query is
+      const res = await fetch("/api/emails")
       const data = await res.json()
 
       if (!res.ok || !Array.isArray(data.emails)) {
         throw new Error("Could not fetch uncategorized emails")
       }
 
-      const emailIds = data.emails.map((email) => email.id)
+      const emailIds = data.emails.map((email: any) => email.id)
 
       if (emailIds.length === 0) {
         showSuccessToast("No uncategorized emails", "Nothing to recategorize")
@@ -213,17 +232,32 @@ export function DashboardLayout() {
       if (response.ok) {
         const result = await response.json()
         showSuccessToast("AI Recategorization Complete", `Updated ${result.updated} emails with AI suggestions`)
-        setRefreshTrigger((prev) => prev + 1)
+
+        // Refresh categories and emails after recategorization
+        await fetchCategories()
+
       } else {
         throw new Error("Failed to recategorize emails")
       }
     } catch (error) {
       showErrorToast(error, "AI Recategorization")
     } finally {
+      triggerEmailRefresh()
       setIsRecategorizing(false)
     }
   }
 
+  const handleInitialCategoriesCreated = () => {
+    setRefreshTrigger((prev) => prev + 1)
+  }
+
+  const handleImportComplete = async () => {
+    // Refresh categories and accounts after import
+    await fetchCategories()
+    await fetchAccounts()
+    // Trigger email list refresh
+    triggerEmailRefresh()
+  }
 
   const getTotalEmailCount = () => {
     return categories.reduce((sum, cat) => sum + cat.email_count, 0)
@@ -443,13 +477,8 @@ export function DashboardLayout() {
 
           {/* Actions */}
           <div className="space-y-2">
-            <MultiAccountDialog
-              onAccountConnected={() => setRefreshTrigger((prev) => prev + 1)}
-              existingAccounts={accounts.length}
-            />
-            {accounts.length > 0 && (
-              <EmailImportButton accounts={accounts} onImportComplete={() => setRefreshTrigger((prev) => prev + 1)} />
-            )}
+            <MultiAccountDialog onAccountConnected={handleImportComplete} existingAccounts={accounts.length} />
+            {accounts.length > 0 && <EmailImportButton accounts={accounts} onImportComplete={handleImportComplete} />}
           </div>
         </div>
       </ScrollArea>
@@ -469,6 +498,13 @@ export function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Initial Categories Dialog */}
+      <InitialCategoriesDialog
+        isOpen={showInitialCategoriesDialog}
+        onClose={() => setShowInitialCategoriesDialog(false)}
+        onCategoriesCreated={handleInitialCategoriesCreated}
+      />
+
       {/* Mobile Header */}
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
         <div className="flex items-center space-x-3">
@@ -503,7 +539,8 @@ export function DashboardLayout() {
               searchQuery={debouncedSearchQuery}
               accounts={accounts}
               categories={categories}
-              onEmailsChange={() => setRefreshTrigger((prev) => prev + 1)}
+              onEmailsChange={triggerEmailRefresh}
+              refreshTrigger={refreshTrigger}
             />
           </div>
         </div>

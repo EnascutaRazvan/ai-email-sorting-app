@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         const date = new Date(Number.parseInt(message.internalDate))
 
         // Extract email body
-        const emailBody = extractEmailBody(message.payload)
+        const { html: emailBody, clean: cleanEmailBody } = extractEmailBody(message.payload)
 
         // Generate AI summary using Groq
         const aiSummary = await generateEmailSummary(subject, from, emailBody)
@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
           is_read: !message.labelIds.includes("UNREAD"),
           gmail_thread_id: message.threadId,
           email_body: emailBody,
+          clean_email_body: cleanEmailBody,
         })
 
         if (insertError) {
@@ -211,43 +212,55 @@ async function buildDateQuery(accountId: string, userId: string, isScheduled: bo
   }
 }
 
-function extractEmailBody(payload: any): string {
+function extractEmailBody(payload: any): { html: string; clean: string } {
+  let htmlBody = ""
+
   if (payload.parts) {
-    // Prefer HTML
     for (const part of payload.parts) {
       if (part.mimeType === "text/html" && part.body?.data) {
-        return Buffer.from(part.body.data, "base64").toString("utf-8")
+        htmlBody = Buffer.from(part.body.data, "base64").toString("utf-8")
+        break
       }
     }
 
-    // Fallback to plain text
-    for (const part of payload.parts) {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        return Buffer.from(part.body.data, "base64").toString("utf-8")
+    if (!htmlBody) {
+      for (const part of payload.parts) {
+        if (part.mimeType === "text/plain" && part.body?.data) {
+          htmlBody = Buffer.from(part.body.data, "base64").toString("utf-8")
+          break
+        }
       }
     }
   }
 
-  if (payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64").toString("utf-8")
+  if (!htmlBody && payload.body?.data) {
+    htmlBody = Buffer.from(payload.body.data, "base64").toString("utf-8")
   }
 
-  return "No content available"
+  const cleanText = cleanHtmlToText(htmlBody || "")
+
+  return {
+    html: htmlBody || "No content available",
+    clean: cleanText || "No plain text available",
+  }
 }
+
 
 async function generateEmailSummary(subject: string, from: string, htmlBody: string): Promise<string> {
   try {
     const plainTextBody = cleanHtmlToText(htmlBody)
-
-    const { text } = await generateText({
-      model: groq("llama-3.1-8b-instant"),
-      prompt: `Summarize this email in 1-2 sentences. Focus on the main purpose and any action items.
+    const prompt = `Summarize the following email. Focus only on the core message and any action required.
 
 Subject: ${subject}
 From: ${from}
-Body: ${plainTextBody.substring(0, 2000)}...
+Body:
+${plainTextBody.substring(0, 2000)}
 
-Summary:`,
+Summary:`
+
+    const { text } = await generateText({
+      model: groq("llama-3.1-8b-instant"),
+      prompt,
       maxTokens: 100,
     })
 

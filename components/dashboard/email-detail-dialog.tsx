@@ -46,7 +46,9 @@ interface EmailDetail {
   subject: string
   sender: string
   sender_name?: string
-  received_at: string
+  received_at: string,
+  is_archived: boolean
+  clean_email_body?: string
   ai_summary?: string
   email_body: string
   is_read: boolean
@@ -87,6 +89,7 @@ export function EmailDetailDialog({ email, isOpen, onClose, onEmailUpdate, categ
 
       if (response.ok) {
         const data = await response.json()
+        console.log(data);
         setEmailDetail(data.email)
       } else {
         const errorData = await response.json()
@@ -151,7 +154,7 @@ export function EmailDetailDialog({ email, isOpen, onClose, onEmailUpdate, categ
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col bg-background">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col bg-background overflow-auto">
         <DialogHeader className="flex-shrink-0 border-b pb-4">
           <DialogTitle className="flex items-center text-lg text-foreground">
             <Mail className="mr-2 h-5 w-5 text-primary" />
@@ -265,9 +268,7 @@ export function EmailDetailDialog({ email, isOpen, onClose, onEmailUpdate, categ
               </div>
               <ScrollArea className="h-[400px] w-full rounded-lg border bg-muted/30 p-6">
                 <div className="prose prose-sm max-w-none text-foreground leading-relaxed whitespace-pre-wrap font-sans">
-                  {emailDetail?.email_body
-                    ? formatEmailBody(emailDetail.email_body)
-                    : email?.content_preview || "Loading content..."}
+                  {emailDetail?.clean_email_body || email?.content_preview || "Loading content..."}
                 </div>
               </ScrollArea>
             </div>

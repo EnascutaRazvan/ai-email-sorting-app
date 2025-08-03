@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const sender = searchParams.get("sender")
     const search = searchParams.get("search")
 
+
     let query = supabase
       .from("emails")
       .select(`
@@ -32,17 +33,23 @@ export async function GET(request: NextRequest) {
       .order("received_at", { ascending: false })
       .limit(100)
 
-    // Apply filters
+    // Apply filters - only apply category filter if it's not "all"
     if (categoryId && categoryId !== "all") {
       if (categoryId === "uncategorized") {
         query = query.is("category_id", null)
+      } else if (categoryId === "unread") {
+        query = query.eq("is_read", false)
+      } else if (categoryId === "starred") {
+        query = query.eq("is_starred", true)
+      } else if (categoryId === "archived") {
+        query = query.eq("is_archived", true)
       } else {
         query = query.eq("category_id", categoryId)
       }
     }
 
     if (accountId) {
-      query = query.eq("account_id", accountId)
+      query = query.eq("user_id", accountId)
     }
 
     if (dateFrom) {
@@ -75,16 +82,16 @@ export async function GET(request: NextRequest) {
       ...email,
       category: email.categories
         ? {
-            id: email.categories.id,
-            name: email.categories.name,
-            color: email.categories.color,
-          }
+          id: email.categories.id,
+          name: email.categories.name,
+          color: email.categories.color,
+        }
         : null,
       account: email.user_accounts
         ? {
-            email: email.user_accounts.email,
-            name: email.user_accounts.name,
-          }
+          email: email.user_accounts.email,
+          name: email.user_accounts.name,
+        }
         : null,
     }))
 

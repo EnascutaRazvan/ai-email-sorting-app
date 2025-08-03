@@ -7,28 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Mail,
-  MoreVertical,
-  Star,
-  Archive,
-  Trash2,
-  Loader2,
-  UnlinkIcon as Unsubscribe,
-  Eye,
-  EyeOff,
-  Sparkles,
-  Clock,
-  User,
-} from "lucide-react"
+import { Mail, Star, Trash2, Loader2, UnlinkIcon as Unsubscribe, Sparkles, Clock, User } from "lucide-react"
 import { EmailFilters } from "./email-filters"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
@@ -74,10 +53,11 @@ interface Account {
 
 interface EmailListProps {
   selectedCategory: string | null
-  searchQuery: string
+  searchQuery?: string
   accounts: Account[]
   categories: Category[]
   onEmailsChange: () => void
+  refreshTrigger: number // ⬅️ Add this
 }
 
 interface UnsubscribeResult {
@@ -98,7 +78,14 @@ interface UnsubscribeResult {
   }>
 }
 
-export function EmailList({ selectedCategory, searchQuery, accounts, categories, onEmailsChange }: EmailListProps) {
+export function EmailList({
+  selectedCategory,
+  searchQuery = "",
+  accounts,
+  categories,
+  onEmailsChange,
+  refreshTrigger
+}: EmailListProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
@@ -115,16 +102,15 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
   const [totalSuccessful, setTotalSuccessful] = useState(0)
 
   // Use ref to prevent multiple simultaneous fetches
-  const fetchingRef = useRef(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
 
   const fetchEmails = useCallback(async () => {
-    // Prevent multiple simultaneous fetches
-    if (fetchingRef.current) {
+    // Don't fetch if component is unmounted
+    if (!mountedRef.current) {
       return
     }
 
-    fetchingRef.current = true
     setIsLoading(true)
 
     // Cancel previous request if it exists
@@ -145,8 +131,10 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
           params.append("is_starred", "true")
         } else if (selectedCategory === "archived") {
           params.append("is_archived", "true")
+        } else if (selectedCategory === "uncategorized") {
+          params.append("category", "uncategorized")
         } else {
-          params.append("category_id", selectedCategory)
+          params.append("category", selectedCategory)
         }
       }
 
@@ -169,6 +157,11 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
         signal: abortControllerRef.current.signal,
       })
 
+      // Check if component is still mounted before updating state
+      if (!mountedRef.current) {
+        return
+      }
+
       if (response.ok) {
         const data = await response.json()
         setEmails(data.emails || [])
@@ -176,23 +169,31 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
         throw new Error("Failed to fetch emails")
       }
     } catch (error) {
-      if (error instanceof Error && error.name !== "AbortError") {
+      // Only show error if it's not an abort error and component is still mounted
+      if (error instanceof Error && error.name !== "AbortError" && mountedRef.current) {
+        console.error("Error fetching emails:", error)
         showErrorToast(error, "Fetching Emails")
       }
     } finally {
-      setIsLoading(false)
-      fetchingRef.current = false
+      // Only update loading state if component is still mounted
+      if (mountedRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder])
 
-  // Fetch emails when dependencies change
   useEffect(() => {
-    fetchEmails()
-  }, [fetchEmails])
+    const timeout = setTimeout(() => {
+      fetchEmails()
+    }, 100)
 
+    return () => clearTimeout(timeout)
+  }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder, refreshTrigger])
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true
     return () => {
+      mountedRef.current = false
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
@@ -222,72 +223,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
   const handleEmailClick = (email: Email) => {
     setSelectedEmail(email)
     setIsDetailDialogOpen(true)
-
-    // Mark as read if not already
-    if (!email.is_read) {
-      handleMarkAsRead([email.id], true)
-    }
-  }
-
-  const handleMarkAsRead = async (emailIds: string[], isRead: boolean) => {
-    try {
-      const response = await fetch("/api/emails/bulk-update", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds, updates: { is_read: isRead } }),
-      })
-
-      if (response.ok) {
-        setEmails((prev) => prev.map((email) => (emailIds.includes(email.id) ? { ...email, is_read: isRead } : email)))
-        onEmailsChange()
-      } else {
-        throw new Error("Failed to update emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "Update Emails")
-    }
-  }
-
-  const handleMarkAsStarred = async (emailIds: string[], isStarred: boolean) => {
-    try {
-      const response = await fetch("/api/emails/bulk-update", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds, updates: { is_starred: isStarred } }),
-      })
-
-      if (response.ok) {
-        setEmails((prev) =>
-          prev.map((email) => (emailIds.includes(email.id) ? { ...email, is_starred: isStarred } : email)),
-        )
-        onEmailsChange()
-      } else {
-        throw new Error("Failed to update emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "Update Emails")
-    }
-  }
-
-  const handleArchive = async (emailIds: string[]) => {
-    try {
-      const response = await fetch("/api/emails/bulk-update", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailIds, updates: { is_archived: true } }),
-      })
-
-      if (response.ok) {
-        setEmails((prev) => prev.filter((email) => !emailIds.includes(email.id)))
-        setSelectedEmails(new Set())
-        showSuccessToast("Emails Archived", `${emailIds.length} email(s) archived successfully`)
-        onEmailsChange()
-      } else {
-        throw new Error("Failed to archive emails")
-      }
-    } catch (error) {
-      showErrorToast(error, "Archive Emails")
-    }
   }
 
   const handleDelete = async (emailIds: string[]) => {
@@ -301,7 +236,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emailIds }),
       })
-
 
       if (response.ok) {
         setEmails((prev) => prev.filter((email) => !emailIds.includes(email.id)))
@@ -413,7 +347,7 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* Filters */}
-      <EmailFilters
+      {/* <EmailFilters
         searchQuery={searchQuery}
         onSearchChange={() => { }} // Handled by parent
         selectedCategory={selectedCategory}
@@ -430,7 +364,7 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
         categories={categories}
         totalEmails={emails.length}
         filteredEmails={filteredEmails.length}
-      />
+      /> */}
 
       {/* Email List */}
       <Card className="glass flex-1 flex flex-col">
@@ -497,7 +431,7 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                 <Mail className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No emails found</h3>
                 <p className="text-muted-foreground">
-                  {searchQuery || selectedCategory || selectedAccount || dateRange !== "all"
+                  {searchQuery || selectedCategory !== "all" || selectedAccount || dateRange !== "all"
                     ? "Try adjusting your filters or search terms"
                     : "Connect your Gmail account to start importing emails"}
                 </p>
@@ -614,7 +548,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                           </div>
                         </div>
                       </div>
-
                     </div>
                   </div>
                 ))}

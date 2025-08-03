@@ -47,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         received_at: email.received_at,
         ai_summary: email.ai_summary,
         email_body: email.email_body,
+        clean_email_body: email.clean_email_body,
         is_read: true, // Update to read
         category: email.categories,
         account: email.user_accounts,
