@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (accountId) {
-      query = query.eq("user_id", accountId)
+      query = query.eq("account_id", accountId)
     }
 
     if (dateFrom) {

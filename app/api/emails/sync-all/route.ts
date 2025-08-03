@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
 
         if (importResponse.ok) {
           const importData = await importResponse.json()
-          totalImported += importData.imported
-          totalProcessed += importData.processed
+          totalImported += importData.imported || 0;
+          totalProcessed += importData.processed || 0;
 
           results.push({
             accountId: account.id,

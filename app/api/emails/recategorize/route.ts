@@ -1,45 +1,61 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { createClient } from "@supabase/supabase-js"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { generateText } from "ai"
-import { groq } from "@ai-sdk/groq"
+import { type NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { createClient } from "@supabase/supabase-js";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { generateText } from "ai";
+import { groq } from "@ai-sdk/groq";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { emailIds } = await request.json()
+    const { emailIds } = await request.json();
 
     if (!emailIds || !Array.isArray(emailIds)) {
-      return NextResponse.json({ error: "Email IDs are required" }, { status: 400 })
+      return NextResponse.json({ error: "Email IDs are required" }, { status: 400 });
     }
 
     // Get user categories
-    const { data: categories } = await supabase.from("categories").select("*").eq("user_id", session.user.id)
+    const { data: categories, error: categoriesError } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("user_id", session.user.id);
+
+    if (categoriesError) {
+      console.error("Error fetching categories:", categoriesError);
+      return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
+    }
 
     if (!categories || categories.length === 0) {
-      return NextResponse.json({ error: "No categories found" }, { status: 400 })
+      return NextResponse.json({ error: "No categories found" }, { status: 400 });
     }
 
     // Get emails to recategorize
-    const { data: emails } = await supabase
+    const { data: emails, error: emailsError } = await supabase
       .from("emails")
       .select("id, subject, sender, snippet, email_body")
       .in("id", emailIds)
-      .eq("user_id", session.user.id)
+      .eq("user_id", session.user.id);
 
-    if (!emails || emails.length === 0) {
-      return NextResponse.json({ error: "No emails found" }, { status: 404 })
+    if (emailsError) {
+      console.error("Error fetching emails:", emailsError);
+      return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 });
     }
 
-    let updatedCount = 0
-    const suggestions = []
+    if (!emails || emails.length === 0) {
+      return NextResponse.json({ error: "No emails found" }, { status: 404 });
+    }
+
+    let updatedCount = 0;
+    const suggestions = [];
 
     for (const email of emails) {
       try {
@@ -47,28 +63,28 @@ export async function POST(request: NextRequest) {
           email.subject,
           email.sender,
           email.email_body || email.snippet,
-          categories,
-        )
+          categories
+        );
 
         if (categoryId) {
           const { error: updateError } = await supabase
             .from("emails")
             .update({ category_id: categoryId })
-            .eq("id", email.id)
+            .eq("id", email.id);
 
           if (!updateError) {
-            updatedCount++
-            const category = categories.find((c) => c.id === categoryId)
+            updatedCount++;
+            const category = categories.find((c) => c.id === categoryId);
             suggestions.push({
               emailId: email.id,
               categoryId,
               categoryName: category?.name,
               categoryColor: category?.color,
-            })
+            });
           }
         }
       } catch (error) {
-        console.error(`Error recategorizing email ${email.id}:`, error)
+        console.error(`Error recategorizing email ${email.id}:`, error);
       }
     }
 
@@ -76,10 +92,10 @@ export async function POST(request: NextRequest) {
       success: true,
       updated: updatedCount,
       suggestions,
-    })
+    });
   } catch (error) {
-    console.error("Recategorization error:", error)
-    return NextResponse.json({ error: "Failed to recategorize emails" }, { status: 500 })
+    console.error("Recategorization error:", error);
+    return NextResponse.json({ error: "Failed to recategorize emails" }, { status: 500 });
   }
 }
 
@@ -87,12 +103,14 @@ async function categorizeEmailWithAI(
   subject: string,
   sender: string,
   body: string,
-  categories: any[],
+  categories: any[]
 ): Promise<string | null> {
-  if (!categories.length) return null
+  if (!categories.length) return null;
 
   try {
-    const categoryList = categories.map((cat) => `- ${cat.name}: ${cat.description}`).join("\n")
+    const categoryList = categories
+      .map((cat) => `- ${cat.name}: ${cat.description}`)
+      .join("\n");
 
     const { text } = await generateText({
       model: groq("llama-3.1-8b-instant"),
@@ -108,17 +126,17 @@ Body: ${body.substring(0, 1000)}...
 
 Category:`,
       maxTokens: 20,
-    })
+    });
 
     const selectedCategory = categories.find(
       (cat) =>
         cat.name.toLowerCase().includes(text.trim().toLowerCase()) ||
-        text.trim().toLowerCase().includes(cat.name.toLowerCase()),
-    )
+        text.trim().toLowerCase().includes(cat.name.toLowerCase())
+    );
 
-    return selectedCategory?.id || null
+    return selectedCategory?.id || null;
   } catch (error) {
-    console.error("Error categorizing email:", error)
-    return null
+    console.error("Error categorizing email:", error);
+    return null;
   }
 }
