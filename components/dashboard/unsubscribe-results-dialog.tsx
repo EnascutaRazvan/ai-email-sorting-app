@@ -267,25 +267,6 @@ export function UnsubscribeResultsDialog({
             </div>
           </ScrollArea>
 
-          {/* Summary Footer */}
-          <div className="border-t border-border pt-4 overflow-auto overflow-y-auto">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-foreground">{totalProcessed}</div>
-                <div className="text-sm text-muted-foreground">Total Processed</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">{totalSuccessful}</div>
-                <div className="text-sm text-muted-foreground">Successful</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-red-600">
-                  {totalProcessed - totalSuccessful}
-                </div>
-                <div className="text-sm text-muted-foreground">Failed</div>
-              </div>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
 
