@@ -16,7 +16,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "@ai-sdk/groq": "latest",
+    "@ai-sdk/groq": "2.0.0",
     "@auth/core": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@jest/globals": "latest",
@@ -76,7 +76,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
-    "zod": "^3.24.1"
+    "zod": "4.0.14"
   },
   "devDependencies": {
     "@swc/core": "^1.13.3",
