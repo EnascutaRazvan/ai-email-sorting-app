@@ -233,13 +233,14 @@ export function DashboardLayout() {
 
         // Refresh categories and emails after recategorization
         await fetchCategories()
-        triggerEmailRefresh()
+
       } else {
         throw new Error("Failed to recategorize emails")
       }
     } catch (error) {
       showErrorToast(error, "AI Recategorization")
     } finally {
+      triggerEmailRefresh()
       setIsRecategorizing(false)
     }
   }
@@ -537,6 +538,7 @@ export function DashboardLayout() {
               accounts={accounts}
               categories={categories}
               onEmailsChange={triggerEmailRefresh}
+              refreshTrigger={refreshTrigger}
             />
           </div>
         </div>

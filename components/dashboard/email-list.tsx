@@ -57,6 +57,7 @@ interface EmailListProps {
   accounts: Account[]
   categories: Category[]
   onEmailsChange: () => void
+  refreshTrigger: number // ⬅️ Add this
 }
 
 interface UnsubscribeResult {
@@ -83,6 +84,7 @@ export function EmailList({
   accounts,
   categories,
   onEmailsChange,
+  refreshTrigger
 }: EmailListProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -186,7 +188,7 @@ export function EmailList({
     }, 100)
 
     return () => clearTimeout(timeout)
-  }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder])
+  }, [selectedCategory, searchQuery, selectedAccount, dateRange, sortBy, sortOrder, refreshTrigger])
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true
