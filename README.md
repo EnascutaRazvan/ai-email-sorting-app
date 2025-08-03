@@ -1,183 +1,122 @@
-# Email Sorting App
+# 📬 AI Email Sorting App
 
 [![Deployed on Railway](https://img.shields.io/badge/Deployed%20on-Railway-purple.svg?style=for-the-badge&logo=railway)](https://ai-email-sorting-app-production.up.railway.app/)
 [![Tech Stack](https://img.shields.io/badge/tech-Next.js-blue.svg?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![Database](https://img.shields.io/badge/database-Supabase-green.svg?style=for-the-badge&logo=supabase)](https://supabase.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
-An intelligent email management application that uses AI to automatically categorize, summarize, and clean up your inbox. Connect multiple Gmail accounts and let the AI do the heavy lifting.
+An intelligent AI-powered application for automatic email categorization, cleanup, and summarization. Connect multiple Gmail accounts and let the app organize your inbox with minimal effort.
 
-## Table of Contents
+---
 
-- [Live Demo](#live-demo)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Database Setup](#database-setup)
-- [Environment Variables](#environment-variables)
-- [Usage](#usage)
-- [Running Tests](#running-tests)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
+## 🚀 Live Demo
 
-## Live Demo
+👉 [Try it here](https://ai-email-sorting-app-production.up.railway.app/)
 
-You can try out the live application here: **[https://ai-email-sorting-app-production.up.railway.app/](https://ai-email-sorting-app-production.up.railway.app/)**
+---
 
-## Features
+## ✨ Features
 
-- **Secure Google Authentication**: Sign in safely using your Google account via NextAuth.js.
-- **Multi-Account Connectivity**: Connect and manage multiple Gmail accounts in one place.
-- **AI-Powered Categorization**: Automatically sorts incoming emails into smart, user-defined categories.
-- **Smart Summaries**: Get quick, AI-generated summaries of long emails without opening them.
-- **Bulk Email Management**: Perform actions like delete, recategorize, and unsubscribe on multiple emails at once.
-- **One-Click Unsubscribe**: Easily unsubscribe from newsletters and promotional emails.
-- **Customizable Categories**: Create, edit, and delete your own categories with custom colors.
-- **Responsive Design**: A clean, modern, and fully responsive UI built with shadcn/ui and Tailwind CSS.
+- 📂 Automatic email categorization using AI
+- 🧹 One-click inbox cleanup
+- 📄 Summarization of long emails
+- 🔌 Support for multiple Gmail accounts
+- 🔒 Secure authentication with NextAuth
+- 📊 Dashboard with real-time filtering and analytics
+- 🔁 Background syncing via scheduled cron jobs
+- 📨 Bulk unsubscribe functionality
 
-## Tech Stack
+---
 
-- **Framework**: [Next.js](https://nextjs.org/) 14 (App Router)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Database**: [Supabase](https://supabase.io/) (PostgreSQL)
-- **Authentication**: [NextAuth.js](https://next-auth.js.org/) (Google Provider)
-- **AI**: [Vercel AI SDK](https://sdk.vercel.ai/) with [Groq](https://groq.com/) for fast inference.
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
-- **Form Management**: [React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)
-- **Testing**: [Jest](https://jestjs.io/), [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), and [Cypress](https://www.cypress.io/)
-- **Deployment**: [Railway](https://railway.app/)
+## 🛠 Tech Stack
 
-## Getting Started
+- **Frontend**: Next.js, Tailwind CSS, TypeScript
+- **Backend**: Next.js API routes, Supabase (PostgreSQL)
+- **AI**: OpenAI integration for email analysis
+- **Auth**: NextAuth.js
+- **Testing**: Jest, Cypress
+- **Deployment**: Railway
 
-Follow these instructions to set up the project locally.
+---
 
-### Prerequisites
+## 📦 Getting Started
 
-- [Node.js](https://nodejs.org/en/) (v18 or later)
-- [npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/), or [pnpm](https://pnpm.io/)
-- A [Supabase](https://supabase.com/) account for the database.
-- A [Google Cloud Platform](https://console.cloud.google.com/) project with OAuth 2.0 credentials.
-- A [Groq](https://console.groq.com/keys) API key.
+### ✅ Prerequisites
 
-### Installation
+- Node.js >= 18.x
+- pnpm (or npm/yarn)
+- Supabase project + credentials
+- Gmail API credentials
 
-1.  **Clone the repository:**
-  \`\`\`bash
-  git clone https://github.com/your-username/ai-email-sorting-app.git
-  cd ai-email-sorting-app
-  \`\`\`
+### 🔧 Installation
 
-2.  **Install dependencies:**
-  \`\`\`bash
-  npm install
-  # or
-  yarn install
-  # or
-  pnpm install
-  \`\`\`
+```bash
+git clone https://github.com/your-username/ai-email-sorting-app.git
+cd ai-email-sorting-app
+pnpm install
+```
 
-### Database Setup
+### 🧱 Database Setup
 
-1.  Go to [Supabase](https://app.supabase.com/) and create a new project.
-2.  Navigate to the **SQL Editor** in your Supabase project.
-3.  Copy the entire content of `scripts/database-schema.sql` and run it to create the necessary tables and policies.
+1. Create a Supabase project.
+2. Run SQL scripts in `/scripts/` to set up tables.
+3. Add environment variables for Supabase keys.
 
-### Environment Variables
+### ⚙️ Environment Variables
 
-Create a `.env.local` file in the root of your project and add the following variables.
+Create a `.env.local` file and add the following:
 
-\`\`\`sh
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+GMAIL_CLIENT_ID=your_client_id
+GMAIL_CLIENT_SECRET=your_client_secret
+NEXTAUTH_SECRET=your_secret
+```
 
-# Google OAuth Credentials
-# See: https://next-auth.js.org/providers/google
-GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+### 🏃‍♂️ Run Locally
 
-# NextAuth
-# Generate a secret with `openssl rand -base64 32`
-NEXTAUTH_SECRET=YOUR_NEXTAUTH_SECRET
-NEXTAUTH_URL=http://localhost:3000
+```bash
+pnpm dev
+```
 
-# AI Provider (Groq)
-GROQ_API_KEY=YOUR_GROQ_API_KEY
-\`\`\`
+App will be available at `http://localhost:3000`.
 
-- You can get your Supabase keys from your project's **Settings > API** page.
-- You can get your Google credentials from the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-- You can get your Groq API key from the [Groq Console](https://console.groq.com/keys).
+---
 
-## Usage
+## 🧪 Testing
 
-Once the setup is complete, run the development server:
+```bash
+pnpm test     # Run unit tests with Jest
+pnpm cypress  # Run end-to-end tests
+```
 
-\`\`\`bash
-npm run dev
-\`\`\`
+---
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+## 🗂 Project Structure
 
-## Running Tests
+```
+/app               → Pages and API routes
+/components        → Reusable UI and feature components
+/hooks             → Custom React hooks
+/lib               → Utility functions and error handling
+/scripts           → Database schema setup
+/__tests__         → Unit and integration tests
+```
 
-This project uses Jest for unit tests and Cypress for end-to-end tests.
+---
 
-- **Run Jest unit tests:**
-\`\`\`bash
-npm test
-\`\`\`
+## 🪪 License
 
-- **Run Cypress E2E tests:**
-\`\`\`bash
-npm run test:e2e
-\`\`\`
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
-- **Open Cypress for interactive testing:**
-\`\`\`bash
-npm run cypress:open
-\`\`\`
+---
 
-## Deployment
+## 🙌 Acknowledgments
 
-### Railway (Current Deployment)
-
-The application is currently deployed on [Railway](https://railway.app/). To deploy your own instance:
-
-1. Fork this repository
-2. Sign up for a [Railway](https://railway.app/) account
-3. Create a new project and connect your GitHub repository
-4. Add all the required environment variables in the Railway dashboard
-5. Deploy automatically on push
-
-### Alternative Deployment Options
-
-#### Vercel
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Add environment variables in Vercel dashboard
-4. Deploy automatically on push
-
-#### Manual Deployment
-\`\`\`bash
-npm run build
-npm start
-\`\`\`
-
-## Contributing
-
-Contributions are welcome! If you have suggestions for improving the app, please feel free to create an issue or submit a pull request.
-
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+- [Next.js](https://nextjs.org/)
+- [Supabase](https://supabase.io/)
+- [OpenAI](https://openai.com/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [NextAuth.js](https://next-auth.js.org/)
