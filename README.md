@@ -11,7 +11,7 @@ An intelligent AI-powered application for automatic email categorization, cleanu
 ## 🚀 Live Demo
 
 👉 [Try it here](https://ai-email-sorting-app-production.up.railway.app/)
-
+ 
 ---
 
 ## ✨ Features
