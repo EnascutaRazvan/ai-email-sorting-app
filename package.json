@@ -66,7 +66,6 @@
     "next-themes": "latest",
     "node-notifier": "latest",
     "nodemailer": "latest",
-    "playwright": "latest",
     "react": "^18",
     "react-day-picker": "latest",
     "react-dom": "^18",
@@ -80,6 +79,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@swc/core": "^1.13.3",
+    "@swc/jest": "^0.2.39",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
@@ -94,6 +95,7 @@
     "postcss": "^8.5",
     "start-server-and-test": "^2.0.3",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.0.0",
     "typescript": "^5"
   }
 }

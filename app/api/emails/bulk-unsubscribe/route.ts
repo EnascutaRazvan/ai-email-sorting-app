@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { createClient } from "@supabase/supabase-js"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { UnsubscribeAgent } from "@/lib/server/unsubscribe-agent"
+// import { UnsubscribeAgent } from "@/lib/server/unsubscribe-agent"
 
 export const runtime = "nodejs"
 
@@ -33,18 +33,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 })
     }
 
-    // ✅ Dynamic import here prevents font parsing issues with Playwright
-    const { UnsubscribeAgent } = await import("@/lib/server/unsubscribe-agent")
-    const unsubscribeAgent = new UnsubscribeAgent()
-
     const results = []
     let successfulUnsubscribes = 0
 
     for (const email of emails) {
       try {
-        console.log(email.email_body);
         const emailContent = email.email_body || email.snippet || ""
-        const unsubscribeResult = await unsubscribeAgent.unsubscribeFromEmail(emailContent)
+
+        const agentResponse = await fetch(`${process.env.unsubscribe_agent}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emailContent }),
+        })
+
+        if (!agentResponse.ok) {
+          throw new Error(`Agent failed: ${agentResponse.statusText}`)
+        }
+
+        const unsubscribeResult = await agentResponse.json()
 
         results.push({
           emailId: email.id,
@@ -79,6 +85,7 @@ export async function POST(request: NextRequest) {
         })
       }
     }
+
 
     return NextResponse.json({
       success: true,
