@@ -7,28 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Mail,
-  MoreVertical,
-  Star,
-  Archive,
-  Trash2,
-  Loader2,
-  UnlinkIcon as Unsubscribe,
-  Eye,
-  EyeOff,
-  Sparkles,
-  Clock,
-  User,
-} from "lucide-react"
+import { Mail, Star, Trash2, Loader2, UnlinkIcon as Unsubscribe, Sparkles, Clock, User } from "lucide-react"
 import { EmailFilters } from "./email-filters"
 import { EmailDetailDialog } from "./email-detail-dialog"
 import { UnsubscribeResultsDialog } from "./unsubscribe-results-dialog"
@@ -74,7 +53,7 @@ interface Account {
 
 interface EmailListProps {
   selectedCategory: string | null
-  searchQuery: string
+  searchQuery?: string // Make it optional with default
   accounts: Account[]
   categories: Category[]
   onEmailsChange: () => void
@@ -98,7 +77,13 @@ interface UnsubscribeResult {
   }>
 }
 
-export function EmailList({ selectedCategory, searchQuery, accounts, categories, onEmailsChange }: EmailListProps) {
+export function EmailList({
+  selectedCategory,
+  searchQuery = "",
+  accounts,
+  categories,
+  onEmailsChange,
+}: EmailListProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
@@ -145,8 +130,10 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
           params.append("is_starred", "true")
         } else if (selectedCategory === "archived") {
           params.append("is_archived", "true")
+        } else if (selectedCategory === "uncategorized") {
+          params.append("category", "uncategorized")
         } else {
-          params.append("category_id", selectedCategory)
+          params.append("category", selectedCategory)
         }
       }
 
@@ -302,7 +289,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
         body: JSON.stringify({ emailIds }),
       })
 
-
       if (response.ok) {
         setEmails((prev) => prev.filter((email) => !emailIds.includes(email.id)))
         setSelectedEmails(new Set())
@@ -415,9 +401,9 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
       {/* Filters */}
       <EmailFilters
         searchQuery={searchQuery}
-        onSearchChange={() => { }} // Handled by parent
+        onSearchChange={() => {}} // Handled by parent
         selectedCategory={selectedCategory}
-        onCategoryChange={() => { }} // Handled by parent
+        onCategoryChange={() => {}} // Handled by parent
         sortBy={sortBy}
         onSortChange={setSortBy}
         sortOrder={sortOrder}
@@ -614,7 +600,6 @@ export function EmailList({ selectedCategory, searchQuery, accounts, categories,
                           </div>
                         </div>
                       </div>
-
                     </div>
                   </div>
                 ))}

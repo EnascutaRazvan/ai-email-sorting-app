@@ -36,6 +36,12 @@ export async function GET(request: NextRequest) {
     if (categoryId && categoryId !== "all") {
       if (categoryId === "uncategorized") {
         query = query.is("category_id", null)
+      } else if (categoryId === "unread") {
+        query = query.eq("is_read", false)
+      } else if (categoryId === "starred") {
+        query = query.eq("is_starred", true)
+      } else if (categoryId === "archived") {
+        query = query.eq("is_archived", true)
       } else {
         query = query.eq("category_id", categoryId)
       }
