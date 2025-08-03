@@ -326,4 +326,3 @@ function cleanHtmlToText(html: string): string {
     ],
   })
 }
-

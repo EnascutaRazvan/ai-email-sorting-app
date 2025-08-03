@@ -1,0 +1,16 @@
+{
+  "accounts": [
+    {
+      "id": "account-1",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "picture": "https://example.com/avatar.jpg",
+      "is_primary": true,
+      "token_status": "valid",
+      "permissions": ["Gmail Read Access", "Gmail Modify Access"],
+      "last_sync": "2024-01-15T08:00:00Z"
+    }
+  ],
+  "total": 1,
+  "primary": "user@example.com"
+}
