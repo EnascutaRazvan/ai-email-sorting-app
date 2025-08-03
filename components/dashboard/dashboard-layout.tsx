@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { MultiAccountDialog } from "./multi-account-dialog"
 import { EmailImportButton } from "./email-import-button"
 import { CreateCategoryDialog } from "./create-category-dialog"
+import { InitialCategoriesDialog } from "./initial-categories-dialog"
 import { cn } from "@/lib/utils"
 import { useDebounce } from "@/hooks/use-debounce"
 import { showErrorToast, showSuccessToast } from "@/lib/error-handler"
@@ -45,6 +46,8 @@ export function DashboardLayout() {
   const [searchQuery, setSearchQuery] = useState("")
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isRecategorizing, setIsRecategorizing] = useState(false)
+  const [showInitialCategoriesDialog, setShowInitialCategoriesDialog] = useState(false)
+  const [hasCheckedInitialCategories, setHasCheckedInitialCategories] = useState(false)
 
   // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
@@ -57,12 +60,19 @@ export function DashboardLayout() {
       const response = await fetch("/api/categories")
       if (response.ok) {
         const data = await response.json()
-        setCategories(data.categories || [])
+        const fetchedCategories = data.categories || []
+        setCategories(fetchedCategories)
+
+        // Check if we should show initial categories dialog
+        if (!hasCheckedInitialCategories && fetchedCategories.length === 0) {
+          setShowInitialCategoriesDialog(true)
+          setHasCheckedInitialCategories(true)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch categories:", error)
     }
-  }, [session?.user?.id])
+  }, [session?.user?.id, hasCheckedInitialCategories])
 
   const fetchAccounts = useCallback(async () => {
     if (!session?.user?.id) return
@@ -224,6 +234,9 @@ export function DashboardLayout() {
     }
   }
 
+  const handleInitialCategoriesCreated = () => {
+    setRefreshTrigger((prev) => prev + 1)
+  }
 
   const getTotalEmailCount = () => {
     return categories.reduce((sum, cat) => sum + cat.email_count, 0)
@@ -469,6 +482,13 @@ export function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Initial Categories Dialog */}
+      <InitialCategoriesDialog
+        isOpen={showInitialCategoriesDialog}
+        onClose={() => setShowInitialCategoriesDialog(false)}
+        onCategoriesCreated={handleInitialCategoriesCreated}
+      />
+
       {/* Mobile Header */}
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-border bg-card">
         <div className="flex items-center space-x-3">
