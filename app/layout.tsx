@@ -7,9 +7,11 @@ import { Providers } from "@/components/providers"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AI Email Sorting App",
+  title: "EmailAI Sorter",
   description: "Organize your emails with AI-powered categorization",
-    generator: 'v0.dev'
+  icons: {
+    icon: "/logo_app.png", // sau "/favicon.ico"
+  },
 }
 
 export default function RootLayout({

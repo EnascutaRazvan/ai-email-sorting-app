@@ -44,12 +44,12 @@ export default function HomePage() {
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Mail className="h-4 w-4 text-primary-foreground" />
+            <div className="w-16 h-16 flex items-center justify-center">
+              <img src="/logo_app.png" alt="App Logo" className="h-16 w-16 object-contain" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Email Sorter</h1>
-              <p className="text-xs text-muted-foreground">AI-powered organization</p>
+              <h1 className="text-xl font-bold text-foreground">EmailAI Sorter</h1>
+              <p className="text-xs text-muted-foreground">AI-powered</p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -85,7 +85,6 @@ export default function HomePage() {
               Get Started Free
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <p className="text-sm text-muted-foreground">No credit card required</p>
           </div>
         </div>
       </section>
@@ -216,10 +215,10 @@ export default function HomePage() {
             <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
               <Mail className="h-3 w-3 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold text-foreground">Email Sorter</span>
+            <span className="text-lg font-semibold text-foreground">EmailAI Sorter</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            © 2024 Email Sorter. All rights reserved. Built with AI for better email management.
+            © {new Date().getFullYear()} EmailAI Sorter. Built with AI for better email management.
           </p>
         </div>
       </footer>

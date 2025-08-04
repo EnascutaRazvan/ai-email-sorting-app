@@ -269,12 +269,12 @@ export function DashboardLayout() {
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-              <Mail className="h-4 w-4 text-sidebar-primary-foreground" />
+            <div className="w-10 h-10 flex items-center justify-center">
+              <img src="/logo_app.png" alt="App Logo" className="h-10 w-10 object-contain" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-sidebar-foreground">Email Sorter</h1>
-              <p className="text-xs text-sidebar-foreground/70">AI-powered organization</p>
+              <h1 className="text-lg font-semibold text-sidebar-foreground">EmailAI Sorter</h1>
+              <p className="text-xs text-sidebar-foreground/70">AI-powered</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">

@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
       .order("received_at", { ascending: false })
       .limit(100)
 
-    // Apply filters - only apply category filter if it's not "all"
     if (categoryId && categoryId !== "all") {
       if (categoryId === "uncategorized") {
         query = query.is("category_id", null)

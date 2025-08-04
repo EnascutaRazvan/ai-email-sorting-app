@@ -37,11 +37,11 @@ export default function SignIn() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-              <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <div className="w-20 h-20 flex items-center justify-center">
+              <img src="/logo_app.png" alt="App Logo" className="h-18 w-18 object-contain" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">AI Email Sorting</CardTitle>
+          <CardTitle className="text-2xl font-bold">EmailAI Sorter</CardTitle>
           <CardDescription>Automatically categorize and manage your emails with AI</CardDescription>
         </CardHeader>
         <CardContent>
