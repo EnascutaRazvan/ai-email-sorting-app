@@ -6,7 +6,7 @@ export async function GET() {
     const response = await fetch(`${process.env.NEXTAUTH_URL}/api/emails/sync-all`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+        authorization: `Bearer ${process.env.CRON_SECRET}`,
         "Content-Type": "application/json",
       },
     })
@@ -16,9 +16,7 @@ export async function GET() {
     if (data.success) {
       console.log(`Cron job completed: ${data.totalImported} emails imported`)
       return NextResponse.json({
-        success: true,
-        message: data.message,
-        imported: data.totalImported,
+        ...data
       })
     } else {
       console.error("Cron job failed:", data.error)
